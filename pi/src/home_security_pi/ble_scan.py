@@ -18,6 +18,7 @@ class BLEDeviceLike(Protocol):
 class AdvertisementLike(Protocol):
     local_name: str | None
     service_uuids: list[str]
+    manufacturer_data: dict[int, bytes]
 
 
 class BLEScanUnavailable(RuntimeError):
@@ -31,6 +32,7 @@ class SeenBLEDevice:
     local_name: str | None
     rssi: int | None
     service_uuids: list[str]
+    manufacturer_data: dict[str, str]
 
 
 def _get_rssi(device: BLEDeviceLike, advertisement: AdvertisementLike) -> int | None:
@@ -38,6 +40,17 @@ def _get_rssi(device: BLEDeviceLike, advertisement: AdvertisementLike) -> int | 
     if value is None:
         value = getattr(device, "rssi", None)
     return value if isinstance(value, int) else None
+
+
+def _normalize_manufacturer_data(
+    raw: dict[int, bytes] | None,
+) -> dict[str, str]:
+    if not raw:
+        return {}
+    return {
+        f"{int(company_id):04x}": bytes(payload).hex()
+        for company_id, payload in raw.items()
+    }
 
 
 def normalize_seen_device(
@@ -50,6 +63,9 @@ def normalize_seen_device(
         local_name=advertisement.local_name,
         rssi=_get_rssi(device, advertisement),
         service_uuids=sorted(str(uuid) for uuid in advertisement.service_uuids),
+        manufacturer_data=_normalize_manufacturer_data(
+            getattr(advertisement, "manufacturer_data", None)
+        ),
     )
 
 
@@ -76,6 +92,7 @@ def build_result(
                 "local_name": device.local_name,
                 "rssi": device.rssi,
                 "service_uuids": device.service_uuids,
+                "manufacturer_data": device.manufacturer_data,
             }
             for device in sorted(devices, key=lambda item: item.address)
         ],

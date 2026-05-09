@@ -29,8 +29,9 @@ def insert_observation(
             """
             INSERT INTO ble_address_observations (
               observed_at_utc, source, scanner, address_observed,
-              name, local_name, rssi, service_uuids_json, hostname
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              name, local_name, rssi, service_uuids_json,
+              manufacturer_data_json, hostname
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 observed_at_utc,
@@ -41,6 +42,7 @@ def insert_observation(
                 None,
                 None,
                 "[]",
+                "{}",
                 hostname,
             ),
         )

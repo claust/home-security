@@ -25,6 +25,7 @@ def build_pi_snapshot(path: Path, rows: list[dict]) -> None:
               local_name TEXT,
               rssi INTEGER,
               service_uuids_json TEXT NOT NULL,
+              manufacturer_data_json TEXT NOT NULL,
               hostname TEXT NOT NULL
             )
             """
@@ -34,8 +35,9 @@ def build_pi_snapshot(path: Path, rows: list[dict]) -> None:
                 """
                 INSERT INTO ble_address_observations (
                   observed_at_utc, source, scanner, address_observed,
-                  name, local_name, rssi, service_uuids_json, hostname
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  name, local_name, rssi, service_uuids_json,
+                  manufacturer_data_json, hostname
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row["observed_at_utc"],
@@ -46,6 +48,7 @@ def build_pi_snapshot(path: Path, rows: list[dict]) -> None:
                     row.get("local_name"),
                     row.get("rssi"),
                     row.get("service_uuids_json", "[]"),
+                    row.get("manufacturer_data_json", "{}"),
                     row.get("hostname", "pi-test"),
                 ),
             )
@@ -238,6 +241,39 @@ class ArchiveTests(unittest.TestCase):
                 )
 
         self.assertEqual(scanners, ["front-yard", "garage"])
+
+    def test_ingest_carries_manufacturer_data_json_through(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            archive_path = tmp / "archive.sqlite3"
+            snapshot_path = tmp / "snap.sqlite3"
+
+            build_pi_snapshot(
+                snapshot_path,
+                [
+                    {
+                        "observed_at_utc": "2026-05-09T10:00:00+00:00",
+                        "address_observed": "AA",
+                        "manufacturer_data_json": ('{"004c":"1006001fa00000"}'),
+                    }
+                ],
+            )
+
+            archive = Archive(archive_path)
+            archive.initialize()
+            archive.ingest_snapshot(
+                snapshot_path=snapshot_path,
+                manifest=manifest_for("pi-test", row_count=1, unique_addresses=1),
+                manifest_path=tmp / "snap.json",
+                ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
+            )
+
+            with sqlite3.connect(archive_path) as connection:
+                stored = connection.execute(
+                    "SELECT manufacturer_data_json FROM ble_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(stored, '{"004c":"1006001fa00000"}')
 
     def test_scanner_summary_returns_counts_and_bounds(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

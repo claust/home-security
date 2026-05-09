@@ -36,6 +36,7 @@ class AddressObservation:
     local_name: str | None
     rssi: int | None
     service_uuids: list[str]
+    manufacturer_data: dict[str, str]
     hostname: str
 
 
@@ -58,6 +59,7 @@ class BLEObservationStore:
                   local_name TEXT,
                   rssi INTEGER,
                   service_uuids_json TEXT NOT NULL,
+                  manufacturer_data_json TEXT NOT NULL,
                   hostname TEXT NOT NULL
                 )
                 """
@@ -82,9 +84,10 @@ class BLEObservationStore:
                   local_name,
                   rssi,
                   service_uuids_json,
+                  manufacturer_data_json,
                   hostname
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     observation.observed_at_utc.isoformat(),
@@ -95,6 +98,11 @@ class BLEObservationStore:
                     observation.local_name,
                     observation.rssi,
                     json.dumps(observation.service_uuids, separators=(",", ":")),
+                    json.dumps(
+                        observation.manufacturer_data,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ),
                     observation.hostname,
                 ),
             )
@@ -166,6 +174,7 @@ def build_observation(
         local_name=seen.local_name,
         rssi=seen.rssi,
         service_uuids=seen.service_uuids,
+        manufacturer_data=seen.manufacturer_data,
         hostname=hostname,
     )
 

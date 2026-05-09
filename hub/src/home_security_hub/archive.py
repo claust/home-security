@@ -35,6 +35,7 @@ class Archive:
                   local_name TEXT,
                   rssi INTEGER,
                   service_uuids_json TEXT NOT NULL,
+                  manufacturer_data_json TEXT NOT NULL,
                   hostname TEXT NOT NULL,
                   ingested_at_utc TEXT NOT NULL,
                   PRIMARY KEY (scanner_id, observed_at_utc, address_observed)
@@ -90,12 +91,14 @@ class Archive:
                     INSERT OR IGNORE INTO main.ble_address_observations (
                       scanner_id, observed_at_utc, source, scanner,
                       address_observed, name, local_name, rssi,
-                      service_uuids_json, hostname, ingested_at_utc
+                      service_uuids_json, manufacturer_data_json,
+                      hostname, ingested_at_utc
                     )
                     SELECT
                       ?, observed_at_utc, source, scanner,
                       address_observed, name, local_name, rssi,
-                      service_uuids_json, hostname, ?
+                      service_uuids_json, manufacturer_data_json,
+                      hostname, ?
                     FROM src.ble_address_observations
                     """,
                     (manifest.scanner_id, ingested_at_iso),

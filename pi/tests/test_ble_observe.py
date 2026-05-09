@@ -27,6 +27,7 @@ class FakeAdvertisement:
     local_name: str | None
     service_uuids: list[str]
     rssi: int | None = None
+    manufacturer_data: dict[int, bytes] | None = None
 
 
 class AdjustableClock:
@@ -150,6 +151,42 @@ class BLEObserveTests(unittest.TestCase):
                 ]
 
         self.assertEqual(addresses, ["AA", "BB"])
+
+    def test_persists_manufacturer_data_as_hex_keyed_json(self) -> None:
+        observed_at = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+        clock = AdjustableClock(observed_at)
+
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "observations.sqlite3"
+            store = BLEObservationStore(database)
+            store.initialize()
+            limiter = ObservationLimiter(
+                store,
+                min_interval=timedelta(seconds=60),
+                clock=clock,
+            )
+
+            observation = build_observation(
+                FakeDevice(address="AA:BB:CC:DD:EE:FF", name=None),
+                FakeAdvertisement(
+                    local_name=None,
+                    service_uuids=[],
+                    manufacturer_data={
+                        0x004C: b"\x10\x06\x00\x1f",
+                        0x0006: b"\x01",
+                    },
+                ),
+                observed_at_utc=observed_at,
+                hostname="test-host",
+            )
+            self.assertTrue(record_if_due(store, limiter, observation))
+
+            with sqlite3.connect(database) as connection:
+                stored = connection.execute(
+                    "SELECT manufacturer_data_json FROM ble_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(stored, '{"0006":"01","004c":"1006001f"}')
 
 
 if __name__ == "__main__":

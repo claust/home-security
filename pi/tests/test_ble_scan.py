@@ -23,6 +23,7 @@ class FakeAdvertisement:
     local_name: str | None
     service_uuids: list[str]
     rssi: int | None = None
+    manufacturer_data: dict[int, bytes] | None = None
 
 
 class BLESSCanTests(unittest.TestCase):
@@ -41,6 +42,32 @@ class BLESSCanTests(unittest.TestCase):
         self.assertEqual(seen.local_name, "Advertised")
         self.assertEqual(seen.rssi, -61)
         self.assertEqual(seen.service_uuids, ["a", "b"])
+
+    def test_normalize_seen_device_encodes_manufacturer_data_as_hex(self) -> None:
+        device = FakeDevice(address="AA:BB:CC:DD:EE:FF", name=None)
+        advertisement = FakeAdvertisement(
+            local_name=None,
+            service_uuids=[],
+            manufacturer_data={
+                0x004C: b"\x10\x06\x00\x1f\xa0\x00\x00",
+                0x0006: bytes([0x01, 0x09]),
+            },
+        )
+
+        seen = normalize_seen_device(device, advertisement)
+
+        self.assertEqual(
+            seen.manufacturer_data,
+            {"004c": "1006001fa00000", "0006": "0109"},
+        )
+
+    def test_normalize_seen_device_handles_missing_manufacturer_data(self) -> None:
+        device = FakeDevice(address="AA", name=None)
+        advertisement = FakeAdvertisement(local_name=None, service_uuids=[])
+
+        seen = normalize_seen_device(device, advertisement)
+
+        self.assertEqual(seen.manufacturer_data, {})
 
     def test_build_result_sorts_devices_by_address(self) -> None:
         started_at = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
