@@ -59,6 +59,7 @@ ssh -t "$HOST" "set -eu
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/local/sbin/home-security-apply-systemd
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-bluetooth-power.service
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-ble-observer.service
+\$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
 EOF
 
   sudo visudo -cf \"\$SUDOERS_TMP\"

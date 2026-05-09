@@ -87,11 +87,24 @@ value. To re-assign a Pi, delete
 `~/.local/state/home-security/scanner-id` on the Pi first, then re-bootstrap.
 
 Bootstrap also installs the narrow `/etc/sudoers.d/home-security-deploy` rules
-that let later deploys restart services without a password.
+that let later deploys restart services and gracefully power off the Pi
+without a password.
 
 A successful deploy ends with the verification JSON (which now includes
 `scanner_id`), the bluetooth-power and BLE observer service status, and a row
 count from `~/.local/state/home-security/observations.sqlite3`.
+
+## Powering Down A Pi
+
+Always shut down gracefully before pulling power — the SD card filesystem and
+the live `observations.sqlite3` database can both be corrupted by mid-write
+power loss. After bootstrap, the deploy user can shut down without a password:
+
+```sh
+ssh home-security-pi-<scanner_id> 'sudo -n /usr/bin/systemctl poweroff'
+```
+
+Wait for the green ACT LED to stop blinking before unplugging.
 
 ## Adding A New Monitor Pi
 
