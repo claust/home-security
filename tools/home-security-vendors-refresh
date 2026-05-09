@@ -1,0 +1,77 @@
+#!/usr/bin/env -S uv run --quiet --no-project --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
+"""Refresh the Bluetooth SIG company-identifier lookup table.
+
+Fetches assigned-numbers/company_identifiers.yaml from the SIG's public repo
+and writes (or rewrites) a `company_identifiers` table inside the consolidated
+archive at ~/.local/state/home-security/archive.sqlite3.
+
+Override the archive path with HOME_SECURITY_ARCHIVE.
+"""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+import sys
+import urllib.request
+from pathlib import Path
+
+import yaml
+
+URL = (
+    "https://bitbucket.org/bluetooth-SIG/public/raw/main/"
+    "assigned_numbers/company_identifiers/company_identifiers.yaml"
+)
+DEFAULT_ARCHIVE = Path.home() / ".local/state/home-security/archive.sqlite3"
+
+
+def main() -> None:
+    archive_path = Path(os.environ.get("HOME_SECURITY_ARCHIVE", DEFAULT_ARCHIVE))
+    if not archive_path.exists():
+        print(
+            f"Archive not found at {archive_path}. "
+            "Run 'uv run home-security-hub-fetch' first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    print(f"Fetching {URL}", file=sys.stderr)
+    with urllib.request.urlopen(URL) as response:
+        document = yaml.safe_load(response.read())
+
+    entries = document["company_identifiers"]
+    rows = [
+        (int(entry["value"]), f"{int(entry['value']):04x}", str(entry["name"]))
+        for entry in entries
+    ]
+    print(f"Parsed {len(rows)} company identifiers", file=sys.stderr)
+
+    with sqlite3.connect(archive_path) as connection:
+        connection.executescript(
+            """
+            DROP TABLE IF EXISTS company_identifiers;
+            CREATE TABLE company_identifiers (
+              company_id INTEGER PRIMARY KEY,
+              company_id_hex TEXT NOT NULL UNIQUE,
+              name TEXT NOT NULL
+            );
+            CREATE INDEX idx_company_identifiers_name
+              ON company_identifiers(name);
+            """
+        )
+        connection.executemany(
+            "INSERT INTO company_identifiers "
+            "(company_id, company_id_hex, name) VALUES (?, ?, ?)",
+            rows,
+        )
+        connection.commit()
+
+    print(f"Wrote {len(rows)} vendors into {archive_path}")
+
+
+if __name__ == "__main__":
+    main()

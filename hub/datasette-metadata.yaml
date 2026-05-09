@@ -1,0 +1,218 @@
+title: Home Security Archive
+description_html: |
+  <p>BLE observations consolidated from monitor Pis. Start with one of the
+  canned queries below, or run free-form SQL on the
+  <a href="/archive">archive database</a>.</p>
+  <ul>
+    <li><a href="/archive/per_scanner_summary">Per-scanner summary</a> — totals and time windows</li>
+    <li><a href="/archive/ingest_history">Snapshot ingest history</a> — what was fetched and when</li>
+    <li><a href="/archive/seen_by_both">Addresses seen by both monitors</a> — devices that pass between scanners</li>
+    <li><a href="/archive/most_observed">Most-observed addresses</a> — top devices by total observations</li>
+    <li><a href="/archive/named_devices">Named devices</a> — addresses that ever advertised a name</li>
+    <li><a href="/archive/hourly_activity">Hourly activity</a> — observations per scanner per UTC hour</li>
+    <li><a href="/archive/vendor_summary">Vendor summary</a> — manufacturer breakdown joined to the Bluetooth SIG company-ID list</li>
+    <li><a href="/archive/manufacturer_breakdown">Manufacturer breakdown</a> — one row per (observation × company ID) with vendor names</li>
+    <li><a href="/archive/apple_device_types">Apple device types</a> — Continuity type byte for Apple (0x004C) advertisements</li>
+    <li><a href="/archive/address_history">Address history</a> — full timeline for a given BLE address</li>
+  </ul>
+
+databases:
+  archive:
+    description_html: |-
+      Read-only mirror of <code>~/.local/state/home-security/archive.sqlite3</code>.
+      The natural key is <code>(scanner_id, observed_at_utc, address_observed)</code>;
+      the same address may appear once per scanner per timestamp.
+    queries:
+      per_scanner_summary:
+        title: Per-scanner summary
+        description: Total observations, distinct addresses, and time window per scanner.
+        sql: |-
+          SELECT
+            scanner_id,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT address_observed) AS distinct_addresses,
+            MIN(observed_at_utc) AS first_observed,
+            MAX(observed_at_utc) AS last_observed
+          FROM ble_address_observations
+          GROUP BY scanner_id
+          ORDER BY scanner_id
+
+      ingest_history:
+        title: Snapshot ingest history
+        description: When each scanner was fetched and how many rows were new.
+        sql: |-
+          SELECT
+            scanner_id,
+            hostname,
+            snapshot_taken_at_utc,
+            rows_in_snapshot,
+            rows_inserted,
+            rows_skipped,
+            ingested_at_utc
+          FROM snapshot_ingests
+          ORDER BY ingested_at_utc DESC
+
+      seen_by_both:
+        title: Addresses seen by both monitors
+        description: Devices observed by more than one scanner — candidates for movement between locations.
+        sql: |-
+          SELECT
+            address_observed,
+            MAX(name) AS name,
+            MAX(local_name) AS local_name,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT scanner_id) AS scanners,
+            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
+            MIN(observed_at_utc) AS first_observed,
+            MAX(observed_at_utc) AS last_observed
+          FROM ble_address_observations
+          GROUP BY address_observed
+          HAVING COUNT(DISTINCT scanner_id) > 1
+          ORDER BY observations DESC
+
+      most_observed:
+        title: Most-observed addresses
+        description: Top 100 BLE addresses ranked by total observations across all scanners.
+        sql: |-
+          SELECT
+            address_observed,
+            MAX(name) AS name,
+            MAX(local_name) AS local_name,
+            COUNT(*) AS observations,
+            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
+            MIN(observed_at_utc) AS first_observed,
+            MAX(observed_at_utc) AS last_observed
+          FROM ble_address_observations
+          GROUP BY address_observed
+          ORDER BY observations DESC
+          LIMIT 100
+
+      named_devices:
+        title: Named devices
+        description: Addresses that have ever advertised a name or local_name, sorted by most recently seen.
+        sql: |-
+          SELECT
+            address_observed,
+            MAX(name) AS name,
+            MAX(local_name) AS local_name,
+            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
+            COUNT(*) AS observations,
+            MAX(observed_at_utc) AS last_observed
+          FROM ble_address_observations
+          WHERE name IS NOT NULL OR local_name IS NOT NULL
+          GROUP BY address_observed
+          ORDER BY last_observed DESC
+
+      hourly_activity:
+        title: Hourly activity
+        description: Observations bucketed by UTC hour for each scanner.
+        sql: |-
+          SELECT
+            substr(observed_at_utc, 1, 13) || ':00' AS hour_utc,
+            scanner_id,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT address_observed) AS distinct_addresses
+          FROM ble_address_observations
+          GROUP BY hour_utc, scanner_id
+          ORDER BY hour_utc DESC, scanner_id
+
+      vendor_summary:
+        title: Vendor summary
+        description: |-
+          BLE advertisers grouped by manufacturer (Bluetooth SIG
+          company ID). Vendor names come from the
+          <code>company_identifiers</code> table, refreshed by
+          <code>tools/home-security-vendors-refresh</code>.
+        sql: |-
+          SELECT
+            m.key AS company_id_hex,
+            COALESCE(c.name, '(unknown)') AS vendor,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT o.address_observed) AS distinct_addresses
+          FROM ble_address_observations o,
+               json_each(o.manufacturer_data_json) m
+          LEFT JOIN company_identifiers c
+            ON c.company_id_hex = m.key
+          GROUP BY m.key
+          ORDER BY observations DESC
+
+      manufacturer_breakdown:
+        title: Manufacturer breakdown
+        description: |-
+          One row per (observation × company ID), joined to the
+          Bluetooth SIG vendor name. Limited to the 500 most-recent
+          rows.
+        sql: |-
+          SELECT
+            o.observed_at_utc,
+            o.scanner_id,
+            o.address_observed,
+            o.rssi,
+            o.name,
+            o.local_name,
+            m.key AS company_id_hex,
+            COALESCE(c.name, '(unknown)') AS vendor,
+            m.value AS payload_hex
+          FROM ble_address_observations o,
+               json_each(o.manufacturer_data_json) m
+          LEFT JOIN company_identifiers c
+            ON c.company_id_hex = m.key
+          ORDER BY o.observed_at_utc DESC
+          LIMIT 500
+
+      apple_device_types:
+        title: Apple device types
+        description: |-
+          Apple Continuity uses company ID 0x004C and encodes the
+          device kind in the first byte of the payload. Type 0x10
+          ("Nearby") is the iPhone / iPad / Mac advertisement;
+          0x12 is FindMy; 0x07 is AirPods proximity pairing.
+        sql: |-
+          WITH apple AS (
+            SELECT
+              address_observed,
+              substr(json_extract(manufacturer_data_json, '$."004c"'), 1, 2) AS type_byte
+            FROM ble_address_observations
+            WHERE json_extract(manufacturer_data_json, '$."004c"') IS NOT NULL
+          )
+          SELECT
+            type_byte,
+            CASE type_byte
+              WHEN '02' THEN 'iBeacon'
+              WHEN '05' THEN 'AirDrop'
+              WHEN '06' THEN 'HomeKit'
+              WHEN '07' THEN 'Proximity Pair (AirPods)'
+              WHEN '08' THEN 'Hey Siri'
+              WHEN '09' THEN 'AirPlay (HomePod / Apple TV)'
+              WHEN '0a' THEN 'Magic Switch'
+              WHEN '0b' THEN 'Watch Connection'
+              WHEN '0c' THEN 'Handoff'
+              WHEN '0d' THEN 'Tethering Target'
+              WHEN '0e' THEN 'Tethering Source'
+              WHEN '0f' THEN 'Nearby Action'
+              WHEN '10' THEN 'Nearby (iPhone / iPad / Mac)'
+              WHEN '12' THEN 'FindMy (AirTag / iPhone offline)'
+              ELSE 'Unknown Apple type'
+            END AS continuity_kind,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT address_observed) AS distinct_addresses
+          FROM apple
+          GROUP BY type_byte
+          ORDER BY observations DESC
+
+      address_history:
+        title: Address history
+        description: All observations for a single BLE address. Edit the parameter at the top of the page.
+        sql: |-
+          SELECT
+            observed_at_utc,
+            scanner_id,
+            rssi,
+            name,
+            local_name,
+            service_uuids_json,
+            manufacturer_data_json
+          FROM ble_address_observations
+          WHERE address_observed = :address
+          ORDER BY observed_at_utc DESC
+          LIMIT 500

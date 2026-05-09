@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+
+ARCHIVE="${HOME_SECURITY_ARCHIVE:-$HOME/.local/state/home-security/archive.sqlite3}"
+PORT="${HOME_SECURITY_DATASETTE_PORT:-8001}"
+METADATA="${HOME_SECURITY_DATASETTE_METADATA:-$REPO_DIR/hub/datasette-metadata.yaml}"
+
+if [ ! -f "$ARCHIVE" ]; then
+  echo "Archive not found at $ARCHIVE." >&2
+  echo "Run 'uv run home-security-hub-fetch' from hub/ first." >&2
+  exit 1
+fi
+
+if ! command -v datasette >/dev/null 2>&1; then
+  echo "datasette not found. Install it with: uv tool install datasette" >&2
+  exit 1
+fi
+
+set -- serve "$ARCHIVE" --port "$PORT" "$@"
+
+if [ -f "$METADATA" ]; then
+  set -- "$@" --metadata "$METADATA"
+fi
+
+exec datasette "$@"
