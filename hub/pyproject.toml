@@ -1,0 +1,28 @@
+[project]
+name = "home-security-hub"
+version = "0.1.0"
+description = "Hub package: pulls observation snapshots from monitor Pis and consolidates them into a local archive."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.4.0",
+    "ruff==0.15.12",
+]
+
+[project.scripts]
+home-security-hub-fetch = "home_security_hub.fetch:main"
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 88
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

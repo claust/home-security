@@ -10,7 +10,7 @@ Three roles, separated so each can evolve independently:
 
 - **Monitor Pi** — fixed location, continuous radio observation, writes to local SQLite. Identical software across all monitors; per-host differences (e.g., `scanner_id`) live in config. The monitor never reaches out and is stateless about delivery; it just snapshots a requested window when asked.
 - **Fetcher** — pulls snapshots from monitor Pis. Two flavors produce the same artifact:
-  - **Fetcher Hub** (Mac Mini, indoors, on home LAN): pulls LAN-reachable monitors directly over SSH/Wi-Fi.
+  - **Fetcher Hub** (indoors, on home LAN): pulls LAN-reachable monitors directly over SSH/Wi-Fi.
   - **Drive-by Fetcher** (laptop): pulls BT-only monitors over SSH/Bluetooth PAN, queues snapshots locally, and later delivers them to the Hub.
 - **Aggregator** — runs on the Fetcher Hub. Owns the merged archive, de-duplicates on ingest, and is the single source of truth for later analysis and fingerprinting.
 
@@ -61,6 +61,8 @@ The working path is a Raspberry Pi monitoring node:
 - `home-security-pi-snapshot` writes a SQLite backup of the observation database plus a JSON manifest under `~/.local/state/home-security/snapshots/`.
 - systemd keeps a continuous BLE observer running against `~/.local/state/home-security/observations.sqlite3`.
 - `tools/deploy-pi.sh` syncs code, installs services, restarts them, and reads back status/results.
+- Hub code lives in `hub/` and is managed with `uv`.
+- `home-security-hub-fetch` SSHes to a monitor Pi, invokes the snapshot helper, copies the snapshot+manifest pair into `~/.local/state/home-security/inbox/<scanner_id>/`, verifies the sha256, and ingests the rows into `~/.local/state/home-security/archive.sqlite3`.
 
 ## Layout
 
@@ -73,6 +75,10 @@ The working path is a Raspberry Pi monitoring node:
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   └── src/home_security_pi/
+├── hub/
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   └── src/home_security_hub/
 └── tools/
     ├── bootstrap-pi-systemd.sh
     └── deploy-pi.sh
