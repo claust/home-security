@@ -46,7 +46,7 @@ def build_pi_snapshot(path: Path, rows: list[dict]) -> None:
                     row.get("local_name"),
                     row.get("rssi"),
                     row.get("service_uuids_json", "[]"),
-                    row.get("hostname", "pi4"),
+                    row.get("hostname", "pi-test"),
                 ),
             )
 
@@ -113,7 +113,7 @@ class ArchiveTests(unittest.TestCase):
             archive.initialize()
             result = archive.ingest_snapshot(
                 snapshot_path=snapshot_path,
-                manifest=manifest_for("pi4", row_count=2, unique_addresses=2),
+                manifest=manifest_for("pi-test", row_count=2, unique_addresses=2),
                 manifest_path=manifest_path,
                 ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
             )
@@ -134,7 +134,7 @@ class ArchiveTests(unittest.TestCase):
                     "SELECT COUNT(*) FROM snapshot_ingests"
                 ).fetchone()[0]
 
-        self.assertEqual(rows, [("pi4", "AA"), ("pi4", "BB")])
+        self.assertEqual(rows, [("pi-test", "AA"), ("pi-test", "BB")])
         self.assertEqual(ingest_rows, 1)
 
     def test_repeated_ingest_is_idempotent(self) -> None:
@@ -156,7 +156,7 @@ class ArchiveTests(unittest.TestCase):
 
             archive = Archive(archive_path)
             archive.initialize()
-            manifest = manifest_for("pi4", row_count=1, unique_addresses=1)
+            manifest = manifest_for("pi-test", row_count=1, unique_addresses=1)
 
             first = archive.ingest_snapshot(
                 snapshot_path=snapshot_path,
@@ -262,12 +262,12 @@ class ArchiveTests(unittest.TestCase):
             archive.initialize()
             archive.ingest_snapshot(
                 snapshot_path=snapshot_path,
-                manifest=manifest_for("pi4", row_count=2, unique_addresses=2),
+                manifest=manifest_for("pi-test", row_count=2, unique_addresses=2),
                 manifest_path=tmp / "snap.json",
                 ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
             )
 
-            summary = archive.scanner_summary("pi4")
+            summary = archive.scanner_summary("pi-test")
 
         self.assertEqual(summary["row_count"], 2)
         self.assertEqual(summary["unique_addresses"], 2)

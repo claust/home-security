@@ -10,8 +10,8 @@ from home_security_hub.manifest import Manifest, ManifestError
 
 def valid_payload(**overrides: object) -> dict:
     payload = {
-        "scanner_id": "pi4",
-        "hostname": "pi4",
+        "scanner_id": "pi-test",
+        "hostname": "pi-test",
         "snapshot_taken_at_utc": "2026-05-09T12:33:30+00:00",
         "database_source": "/state/home-security/observations.sqlite3",
         "row_count": 3126,
@@ -29,7 +29,7 @@ def valid_payload(**overrides: object) -> dict:
 class ManifestTests(unittest.TestCase):
     def test_from_dict_parses_valid_payload(self) -> None:
         manifest = Manifest.from_dict(valid_payload())
-        self.assertEqual(manifest.scanner_id, "pi4")
+        self.assertEqual(manifest.scanner_id, "pi-test")
         self.assertEqual(manifest.row_count, 3126)
         self.assertEqual(manifest.integrity, "ok")
         self.assertEqual(manifest.observed_at_utc_min, "2026-05-09T10:50:35+00:00")
@@ -69,7 +69,7 @@ class ManifestTests(unittest.TestCase):
             path = Path(directory) / "manifest.json"
             path.write_text(json.dumps(valid_payload()), encoding="utf-8")
             manifest = Manifest.from_path(path)
-        self.assertEqual(manifest.scanner_id, "pi4")
+        self.assertEqual(manifest.scanner_id, "pi-test")
 
     def test_from_path_rejects_invalid_json(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

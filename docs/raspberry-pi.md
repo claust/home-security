@@ -95,18 +95,83 @@ count from `~/.local/state/home-security/observations.sqlite3`.
 
 ## Adding A New Monitor Pi
 
-1. Pick a unique, stable `scanner_id` for the Pi
-   (e.g. `pi-livingroom`, `pi-garage`).
-2. Add a `home-security-pi-<scanner_id>` SSH alias and copy the project key
-   to it.
-3. Install `uv` on the Pi (see above).
-4. Run bootstrap once with both `HOME_SECURITY_PI_HOST` and
-   `HOME_SECURITY_SCANNER_ID` set. This writes the scanner identity file on
-   the Pi.
-5. Run deploy with `HOME_SECURITY_PI_HOST` set to the new alias; confirm the
-   verification JSON shows the expected `scanner_id` and observer status reads
-   back cleanly.
-6. From the hub, pull a first snapshot to confirm end-to-end:
+End-to-end checklist for onboarding a fresh Pi from a blank SD card. The
+example below uses `pi-frontyard` as the chosen `scanner_id`; substitute your
+own.
+
+1. **Pick a `scanner_id`** — short, stable slug matching
+   `[A-Za-z0-9][A-Za-z0-9.-]*` (e.g. `pi-frontyard`, `pi-garage`).
+
+2. **Flash the SD card with Raspberry Pi Imager.** In the imager's settings
+   pane, set:
+   - Hostname: `<scanner_id>` (matching keeps things simple).
+   - Username and password for the deploy user.
+   - Enable SSH with public-key auth and paste the project key
+     (`~/.ssh/home_security_pi_ed25519.pub`) so the Pi accepts your key on
+     first boot. If you skip this, you'll need `ssh-copy-id` later (see
+     step 5).
+   - Wi-Fi credentials if the Pi will be wireless.
+
+3. **Boot the Pi and find it on the LAN.** Pi OS publishes mDNS, so the Pi
+   appears as `<hostname>.local`:
+
+   ```sh
+   ping <scanner_id>.local
+   ```
+
+   If the Pi reuses an IP that previously hosted a different OS (re-imaged
+   hardware), prune the stale host key first:
+
+   ```sh
+   ssh-keygen -R <ip-address>
+   ssh-keygen -R <scanner_id>.local
+   ```
+
+4. **Add an SSH alias.** Append to `~/.ssh/config`:
+
+   ```sshconfig
+   Host home-security-pi home-security-pi-<scanner_id>
+     HostName <ip-address-or-mdns-name>
+     User <pi-user>
+     IdentityFile ~/.ssh/home_security_pi_ed25519
+     IdentitiesOnly yes
+   ```
+
+   Listing both names on one `Host` line lets the bare `home-security-pi`
+   default target this Pi while the explicit alias still works. If you have
+   more than one monitor, only the most relevant Pi should share the bare
+   default — give the others a standalone block.
+
+5. **Authorize the key** (skip if you preinstalled the public key in
+   step 2):
+
+   ```sh
+   ssh-copy-id -i ~/.ssh/home_security_pi_ed25519.pub <pi-user>@<ip-or-mdns>
+   ```
+
+6. **Install `uv` on the Pi** over SSH (no Pi-side password needed):
+
+   ```sh
+   ssh home-security-pi-<scanner_id> 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+   ```
+
+7. **Bootstrap.** This writes `~/.local/state/home-security/scanner-id` on
+   the Pi and installs the sudoers rules. Expect one sudo password prompt:
+
+   ```sh
+   HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
+     HOME_SECURITY_SCANNER_ID=<scanner_id> \
+     ./tools/bootstrap-pi-systemd.sh
+   ```
+
+8. **Deploy.** Confirms the services are healthy and verification JSON shows
+   the expected `scanner_id`:
+
+   ```sh
+   HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
+   ```
+
+9. **First snapshot from the hub** to confirm end-to-end:
 
    ```sh
    cd hub && uv run home-security-hub-fetch --host home-security-pi-<scanner_id>
@@ -114,7 +179,9 @@ count from `~/.local/state/home-security/observations.sqlite3`.
 
    The archive at `~/.local/state/home-security/archive.sqlite3` should now
    contain a row group keyed on the new `scanner_id`.
-7. Record the alias → scanner_id → hostname mapping in `LOCAL-PIS.md`.
+
+10. **Record the mapping** (alias → scanner_id → hostname → IP) in the
+    gitignored `LOCAL-PIS.md`.
 
 ## Deploy Directory
 

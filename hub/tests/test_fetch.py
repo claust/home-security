@@ -41,12 +41,12 @@ class ParseRemoteSnapshotOutputTests(unittest.TestCase):
         payload = {
             "snapshot_path": "/x/snap.sqlite3",
             "manifest_path": "/x/snap.json",
-            "manifest": {"scanner_id": "pi4"},
+            "manifest": {"scanner_id": "pi-test"},
         }
         result = parse_remote_snapshot_output(json.dumps(payload))
         self.assertEqual(result.snapshot_path, "/x/snap.sqlite3")
         self.assertEqual(result.manifest_path, "/x/snap.json")
-        self.assertEqual(result.manifest["scanner_id"], "pi4")
+        self.assertEqual(result.manifest["scanner_id"], "pi-test")
 
     def test_invalid_json_raises_fetch_error(self) -> None:
         with self.assertRaises(FetchError):

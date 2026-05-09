@@ -142,7 +142,7 @@ class SnapshotTests(unittest.TestCase):
                 validate_scanner_id(invalid)
 
     def test_valid_scanner_ids_pass(self) -> None:
-        for valid in ["pi4", "front-yard", "Garage.Indoor-1", "abc123"]:
+        for valid in ["pi-test", "front-yard", "Garage.Indoor-1", "abc123"]:
             self.assertEqual(validate_scanner_id(valid), valid)
 
     def test_read_scanner_id_file_returns_validated_value(self) -> None:
