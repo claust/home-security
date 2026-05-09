@@ -23,12 +23,18 @@ uv run home-security-pi-ble-observe
 ## Deployment
 
 From the repository root, set `HOME_SECURITY_PI_HOST` to the per-host SSH alias
-(default: `home-security-pi`). See `docs/raspberry-pi.md` for the full setup
-flow including SSH alias scheme and prerequisites.
+(default: `home-security-pi`) and `HOME_SECURITY_SCANNER_ID` to the scanner
+identity for the bootstrap step. See `docs/raspberry-pi.md` for the full setup
+flow including SSH alias scheme, prerequisites, and the scanner identity file.
 
 ```sh
-HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/bootstrap-pi-systemd.sh   # once per Pi
-HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/deploy-pi.sh              # normal deploy
+# Once per Pi (writes ~/.local/state/home-security/scanner-id):
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
+  HOME_SECURITY_SCANNER_ID=<scanner_id> \
+  ./tools/bootstrap-pi-systemd.sh
+
+# Normal deploy:
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
 ```
 
 The remote code directory is `~/home-security-pi` and is managed with `rsync --delete`. Keep runtime state, logs, config, observations, captures, and caches outside it.

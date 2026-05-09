@@ -11,6 +11,7 @@ from home_security_pi.ble_observe import BLEObservationStore
 from home_security_pi.snapshot import (
     SnapshotError,
     create_snapshot,
+    read_scanner_id_file,
     sha256_file,
     validate_scanner_id,
 )
@@ -143,6 +144,32 @@ class SnapshotTests(unittest.TestCase):
     def test_valid_scanner_ids_pass(self) -> None:
         for valid in ["pi4", "front-yard", "Garage.Indoor-1", "abc123"]:
             self.assertEqual(validate_scanner_id(valid), valid)
+
+    def test_read_scanner_id_file_returns_validated_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scanner-id"
+            path.write_text("pi-livingroom\n", encoding="utf-8")
+            self.assertEqual(read_scanner_id_file(path), "pi-livingroom")
+
+    def test_read_scanner_id_file_missing_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scanner-id"
+            with self.assertRaises(SnapshotError):
+                read_scanner_id_file(path)
+
+    def test_read_scanner_id_file_empty_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scanner-id"
+            path.write_text("   \n", encoding="utf-8")
+            with self.assertRaises(SnapshotError):
+                read_scanner_id_file(path)
+
+    def test_read_scanner_id_file_invalid_value_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "scanner-id"
+            path.write_text("bad id with spaces\n", encoding="utf-8")
+            with self.assertRaises(SnapshotError):
+                read_scanner_id_file(path)
 
     def test_missing_database_raises(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -8,7 +8,7 @@ The project is defensive and consent-oriented. It uses approved local interfaces
 
 Three roles, separated so each can evolve independently:
 
-- **Monitor Pi** — fixed location, continuous radio observation, writes to local SQLite. Identical software across all monitors; per-host differences (e.g., `scanner_id`) live in config. The monitor never reaches out and is stateless about delivery; it just snapshots a requested window when asked.
+- **Monitor Pi** — fixed location, continuous radio observation, writes to local SQLite. Identical software across all monitors; the per-Pi `scanner_id` is written once at bootstrap to `~/.local/state/home-security/scanner-id` and is independent of hostname. The monitor never reaches out and is stateless about delivery; it just snapshots a requested window when asked.
 - **Fetcher** — pulls snapshots from monitor Pis. Two flavors produce the same artifact:
   - **Fetcher Hub** (indoors, on home LAN): pulls LAN-reachable monitors directly over SSH/Wi-Fi.
   - **Drive-by Fetcher** (laptop): pulls BT-only monitors over SSH/Bluetooth PAN, queues snapshots locally, and later delivers them to the Hub.
@@ -39,6 +39,7 @@ Same XDG-style layout on every machine:
 
 | Role | Path |
 | --- | --- |
+| Monitor Pi: scanner identity | `~/.local/state/home-security/scanner-id` |
 | Monitor Pi: live observations | `~/.local/state/home-security/observations.sqlite3` |
 | Fetcher Hub: aggregated archive | `~/.local/state/home-security/archive.sqlite3` |
 | Fetcher Hub: incoming snapshots | `~/.local/state/home-security/inbox/<scanner_id>/` |
@@ -86,21 +87,27 @@ The working path is a Raspberry Pi monitoring node:
 
 ## Raspberry Pi Deployment
 
-Each monitor Pi has its own `home-security-pi<hostname>` SSH alias; the bare
-`home-security-pi` alias is the default target. See `docs/raspberry-pi.md` for
-the full setup flow, including prerequisites (SSH key, sudo, `uv`) and how to
-add a new monitor.
+Each monitor Pi has its own `home-security-pi-<scanner_id>` SSH alias; the bare
+`home-security-pi` alias is the default target. The `scanner_id` itself is a
+short stable slug (e.g. `pi-livingroom`) written once at bootstrap to
+`~/.local/state/home-security/scanner-id` on the Pi. See `docs/raspberry-pi.md`
+for the full setup flow, including prerequisites (SSH key, sudo, `uv`) and how
+to add a new monitor.
 
-Run once per Pi (interactive sudo prompt):
+Run once per Pi (interactive sudo prompt; `HOME_SECURITY_SCANNER_ID` is
+required and written to the scanner identity file on the Pi):
 
 ```sh
-HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/bootstrap-pi-systemd.sh
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
+  HOME_SECURITY_SCANNER_ID=<scanner_id> \
+  ./tools/bootstrap-pi-systemd.sh
 ```
 
-Deploy any later code/service changes (non-interactive):
+Deploy any later code/service changes (non-interactive; the Pi already knows
+its own `scanner_id`):
 
 ```sh
-HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/deploy-pi.sh
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
 ```
 
 `HOME_SECURITY_PI_HOST` defaults to `home-security-pi`, so it can be omitted

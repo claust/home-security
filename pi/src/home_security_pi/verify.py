@@ -8,14 +8,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from home_security_pi import __version__
+from home_security_pi.snapshot import (
+    DEFAULT_SCANNER_ID_FILE,
+    SnapshotError,
+    read_scanner_id_file,
+)
 
 
-def build_result() -> dict[str, str]:
+def read_scanner_id_or_none() -> str | None:
+    try:
+        return read_scanner_id_file(DEFAULT_SCANNER_ID_FILE)
+    except SnapshotError:
+        return None
+
+
+def build_result() -> dict[str, str | None]:
     return {
         "status": "ok",
         "package": "home-security-pi",
         "version": __version__,
         "timestamp_utc": datetime.now(UTC).isoformat(),
+        "scanner_id": read_scanner_id_or_none(),
         "hostname": socket.gethostname(),
         "python": platform.python_version(),
         "platform": platform.platform(),

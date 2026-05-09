@@ -15,12 +15,27 @@ from home_security_pi import __version__
 
 DEFAULT_DATABASE = Path.home() / ".local/state/home-security/observations.sqlite3"
 DEFAULT_OUTPUT_DIR = Path.home() / ".local/state/home-security/snapshots"
+DEFAULT_SCANNER_ID_FILE = Path.home() / ".local/state/home-security/scanner-id"
 
 SCANNER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]*$")
 
 
 class SnapshotError(RuntimeError):
     """Raised when a snapshot cannot be produced."""
+
+
+def read_scanner_id_file(path: Path) -> str:
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise SnapshotError(
+            f"Scanner identity file is missing: {path}. "
+            "Run bootstrap with HOME_SECURITY_SCANNER_ID set."
+        ) from exc
+    scanner_id = contents.strip()
+    if not scanner_id:
+        raise SnapshotError(f"Scanner identity file is empty: {path}")
+    return validate_scanner_id(scanner_id)
 
 
 @dataclass(frozen=True)
@@ -163,17 +178,31 @@ def main() -> None:
     )
     parser.add_argument(
         "--scanner-id",
-        default=socket.gethostname(),
-        help="Stable scanner identifier (defaults to hostname).",
+        default=None,
+        help=(
+            "Stable scanner identifier. Defaults to the contents of "
+            f"{DEFAULT_SCANNER_ID_FILE}, which is written once at bootstrap."
+        ),
+    )
+    parser.add_argument(
+        "--scanner-id-file",
+        type=Path,
+        default=DEFAULT_SCANNER_ID_FILE,
+        help="Path to the scanner identity file (used when --scanner-id is not given).",
     )
     args = parser.parse_args()
 
     snapshot_taken_at = utc_now()
     try:
+        scanner_id = (
+            validate_scanner_id(args.scanner_id)
+            if args.scanner_id
+            else read_scanner_id_file(args.scanner_id_file)
+        )
         snapshot_path, manifest_path, manifest = create_snapshot(
             database=args.database,
             output_dir=args.output_dir,
-            scanner_id=args.scanner_id,
+            scanner_id=scanner_id,
             snapshot_taken_at=snapshot_taken_at,
             hostname=socket.gethostname(),
         )
