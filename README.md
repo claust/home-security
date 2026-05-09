@@ -58,6 +58,7 @@ The working path is a Raspberry Pi monitoring node:
 - `home-security-pi-verify` writes host/runtime metadata.
 - `home-security-pi-ble-scan` passively scans BLE advertisements and writes JSON.
 - `home-security-pi-ble-observe` continuously records BLE addresses observed to SQLite.
+- `home-security-pi-snapshot` writes a SQLite backup of the observation database plus a JSON manifest under `~/.local/state/home-security/snapshots/`.
 - systemd keeps a continuous BLE observer running against `~/.local/state/home-security/observations.sqlite3`.
 - `tools/deploy-pi.sh` syncs code, installs services, restarts them, and reads back status/results.
 
