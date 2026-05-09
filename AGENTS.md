@@ -10,8 +10,8 @@ Read `README.md` first. It describes the current Pi deployment, service stack, r
 - `pi/pyproject.toml` and `pi/uv.lock` define the locked Pi package.
 - `pi/systemd/` contains service templates.
 - `pi/sbin/home-security-apply-systemd` installs/updates the services on the Pi.
-- `tools/bootstrap-pi-systemd.sh` is the one-time interactive Pi bootstrap.
-- `tools/deploy-pi.sh` is the normal non-interactive deploy.
+- `tools/bootstrap-pi-systemd` is the one-time interactive Pi bootstrap.
+- `tools/deploy-pi` is the normal non-interactive deploy.
 - `docs/raspberry-pi.md` documents SSH alias and deploy directory conventions.
 
 Keep the project small. Prefer focused, testable Python modules over frameworks.
@@ -39,6 +39,6 @@ Treat MAC addresses, device names, RSSI histories, timestamps, packet captures, 
 - Check `git status --short` before editing.
 - Do not overwrite unrelated user changes.
 - Run tests for changed Python code.
-- Run `./tools/deploy-pi.sh` when changing Pi-deployed code or services, then verify the result read back from the Pi.
+- Run `./tools/deploy-pi` when changing Pi-deployed code or services, then verify the result read back from the Pi.
 - Keep Pi state, config, logs, observations, and caches outside `~/home-security-pi`.
 - Document any new hardware permission, systemd service, dependency, database, or storage behavior.

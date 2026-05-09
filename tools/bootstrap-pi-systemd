@@ -72,5 +72,5 @@ EOF
   sudo -n /usr/bin/systemctl restart home-security-bluetooth-power.service
   sudo -n /usr/bin/systemctl restart home-security-ble-observer.service
 
-  printf 'Bootstrap complete. Future ./tools/deploy-pi.sh runs should be non-interactive.\n'
+  printf 'Bootstrap complete. Future ./tools/deploy-pi runs should be non-interactive.\n'
 "

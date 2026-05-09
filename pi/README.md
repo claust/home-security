@@ -31,10 +31,10 @@ flow including SSH alias scheme, prerequisites, and the scanner identity file.
 # Once per Pi (writes ~/.local/state/home-security/scanner-id):
 HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
   HOME_SECURITY_SCANNER_ID=<scanner_id> \
-  ./tools/bootstrap-pi-systemd.sh
+  ./tools/bootstrap-pi-systemd
 
 # Normal deploy:
-HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi
 ```
 
 The remote code directory is `~/home-security-pi` and is managed with `rsync --delete`. Keep runtime state, logs, config, observations, captures, and caches outside it.

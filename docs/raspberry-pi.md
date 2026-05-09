@@ -50,7 +50,7 @@ After key-based login works, prefer disabling password SSH login on the Pi.
 
 ## Per-Pi Prerequisites
 
-Before running `bootstrap-pi-systemd.sh` against a Pi, that Pi must have:
+Before running `bootstrap-pi-systemd` against a Pi, that Pi must have:
 
 1. The project SSH key authorized for the deploy user.
 2. The deploy user able to `sudo` (a password prompt is expected during
@@ -74,10 +74,10 @@ its identity via `HOME_SECURITY_SCANNER_ID`:
 # ~/.local/state/home-security/scanner-id on the Pi:
 HOME_SECURITY_PI_HOST=home-security-pi-garage \
   HOME_SECURITY_SCANNER_ID=pi-garage \
-  ./tools/bootstrap-pi-systemd.sh
+  ./tools/bootstrap-pi-systemd
 
 # Normal, non-interactive deploys (no scanner_id needed — the Pi already has it):
-HOME_SECURITY_PI_HOST=home-security-pi-garage ./tools/deploy-pi.sh
+HOME_SECURITY_PI_HOST=home-security-pi-garage ./tools/deploy-pi
 ```
 
 If `HOME_SECURITY_PI_HOST` is unset both scripts target `home-security-pi`.
@@ -174,14 +174,14 @@ own.
    ```sh
    HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
      HOME_SECURITY_SCANNER_ID=<scanner_id> \
-     ./tools/bootstrap-pi-systemd.sh
+     ./tools/bootstrap-pi-systemd
    ```
 
 8. **Deploy.** Confirms the services are healthy and verification JSON shows
    the expected `scanner_id`:
 
    ```sh
-   HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
+   HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi
    ```
 
 9. **First snapshot from the hub** to confirm end-to-end:
@@ -198,7 +198,7 @@ own.
 
 ## Deploy Directory
 
-`tools/deploy-pi.sh` syncs the local `pi/` directory to:
+`tools/deploy-pi` syncs the local `pi/` directory to:
 
 ```text
 ~/home-security-pi

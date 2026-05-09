@@ -61,7 +61,7 @@ The working path is a Raspberry Pi monitoring node:
 - `home-security-pi-ble-observe` continuously records BLE addresses observed to SQLite.
 - `home-security-pi-snapshot` writes a SQLite backup of the observation database plus a JSON manifest under `~/.local/state/home-security/snapshots/`.
 - systemd keeps a continuous BLE observer running against `~/.local/state/home-security/observations.sqlite3`.
-- `tools/deploy-pi.sh` syncs code, installs services, restarts them, and reads back status/results.
+- `tools/deploy-pi` syncs code, installs services, restarts them, and reads back status/results.
 - Hub code lives in `hub/` and is managed with `uv`.
 - `home-security-hub-fetch` SSHes to a monitor Pi, invokes the snapshot helper, copies the snapshot+manifest pair into `~/.local/state/home-security/inbox/<scanner_id>/`, verifies the sha256, and ingests the rows into `~/.local/state/home-security/archive.sqlite3`.
 
@@ -81,8 +81,8 @@ The working path is a Raspberry Pi monitoring node:
 │   ├── uv.lock
 │   └── src/home_security_hub/
 └── tools/
-    ├── bootstrap-pi-systemd.sh
-    └── deploy-pi.sh
+    ├── bootstrap-pi-systemd
+    └── deploy-pi
 ```
 
 ## Raspberry Pi Deployment
@@ -100,14 +100,14 @@ required and written to the scanner identity file on the Pi):
 ```sh
 HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> \
   HOME_SECURITY_SCANNER_ID=<scanner_id> \
-  ./tools/bootstrap-pi-systemd.sh
+  ./tools/bootstrap-pi-systemd
 ```
 
 Deploy any later code/service changes (non-interactive; the Pi already knows
 its own `scanner_id`):
 
 ```sh
-HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi.sh
+HOME_SECURITY_PI_HOST=home-security-pi-<scanner_id> ./tools/deploy-pi
 ```
 
 `HOME_SECURITY_PI_HOST` defaults to `home-security-pi`, so it can be omitted
