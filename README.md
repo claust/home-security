@@ -4,6 +4,52 @@ Local-first home security tooling for understanding electronic devices observed 
 
 The project is defensive and consent-oriented. It uses approved local interfaces, currently the Raspberry Pi Bluetooth adapter, to passively observe nearby signals and write local structured results.
 
+## Architecture
+
+Three roles, separated so each can evolve independently:
+
+- **Monitor Pi** — fixed location, continuous radio observation, writes to local SQLite. Identical software across all monitors; per-host differences (e.g., `scanner_id`) live in config. The monitor never reaches out and is stateless about delivery; it just snapshots a requested window when asked.
+- **Fetcher** — pulls snapshots from monitor Pis. Two flavors produce the same artifact:
+  - **Fetcher Hub** (Mac Mini, indoors, on home LAN): pulls LAN-reachable monitors directly over SSH/Wi-Fi.
+  - **Drive-by Fetcher** (laptop): pulls BT-only monitors over SSH/Bluetooth PAN, queues snapshots locally, and later delivers them to the Hub.
+- **Aggregator** — runs on the Fetcher Hub. Owns the merged archive, de-duplicates on ingest, and is the single source of truth for later analysis and fingerprinting.
+
+### Retrieval flow
+
+Both transports converge on one ingest path:
+
+```text
+LAN monitor ──(SSH/Wi-Fi)─────────────────────┐
+                                              ├─► Hub inbox/ → ingest → archive.sqlite3
+BT-only monitor ─(SSH/BT-PAN)─► laptop outbox/ ┘  (via rsync to Hub)
+```
+
+Each retrieval produces the same pair of files:
+
+- `<scanner_id>__<snapshot_taken_at>.sqlite3` — SQLite backup of the monitor's observation DB.
+- `<scanner_id>__<snapshot_taken_at>.json` — manifest carrying `scanner_id`, `hostname`, `snapshot_taken_at`, row count, observed-at-utc min/max, sha256, and Pi git SHA.
+
+### Idempotent ingest
+
+The aggregator de-duplicates on the natural key `(scanner_id, observed_at_utc, address_observed)` with `INSERT OR IGNORE`. Overlapping retrieval of the same monitor (e.g., a drive-by followed shortly by a LAN pull) is therefore safe and produces no duplicate rows.
+
+### Path conventions
+
+Same XDG-style layout on every machine:
+
+| Role | Path |
+| --- | --- |
+| Monitor Pi: live observations | `~/.local/state/home-security/observations.sqlite3` |
+| Fetcher Hub: aggregated archive | `~/.local/state/home-security/archive.sqlite3` |
+| Fetcher Hub: incoming snapshots | `~/.local/state/home-security/inbox/<scanner_id>/` |
+| Drive-by Fetcher: queued snapshots | `~/.local/state/home-security/outbox/<scanner_id>/` |
+
+### Build order
+
+1. LAN-direct fetch from the existing monitor Pi into the Hub inbox, then ingest into `archive.sqlite3`. Proves the snapshot + manifest + ingest contract end-to-end.
+2. Drive-by/BT-PAN courier mode on a laptop, reusing the same snapshot + manifest format and the same Hub-side ingest.
+3. Scheduled periodic LAN pulls on the Hub (systemd timer or launchd). Drive-by stays manual.
+
 ## Current Status
 
 The working path is a Raspberry Pi monitoring node:
