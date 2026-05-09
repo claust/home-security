@@ -86,19 +86,25 @@ The working path is a Raspberry Pi monitoring node:
 
 ## Raspberry Pi Deployment
 
-Configure the local SSH alias `home-security-pi`; see `docs/raspberry-pi.md`.
+Each monitor Pi has its own `home-security-pi<hostname>` SSH alias; the bare
+`home-security-pi` alias is the default target. See `docs/raspberry-pi.md` for
+the full setup flow, including prerequisites (SSH key, sudo, `uv`) and how to
+add a new monitor.
 
-Run once per Pi:
-
-```sh
-./tools/bootstrap-pi-systemd.sh
-```
-
-Deploy any later code/service changes:
+Run once per Pi (interactive sudo prompt):
 
 ```sh
-./tools/deploy-pi.sh
+HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/bootstrap-pi-systemd.sh
 ```
+
+Deploy any later code/service changes (non-interactive):
+
+```sh
+HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/deploy-pi.sh
+```
+
+`HOME_SECURITY_PI_HOST` defaults to `home-security-pi`, so it can be omitted
+when targeting that alias.
 
 Deployment syncs `pi/` to `~/home-security-pi` with `rsync --delete`. That directory is code-only. Runtime state, observations, logs, caches, and config must stay outside it.
 

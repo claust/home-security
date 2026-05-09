@@ -22,11 +22,13 @@ uv run home-security-pi-ble-observe
 
 ## Deployment
 
-From the repository root:
+From the repository root, set `HOME_SECURITY_PI_HOST` to the per-host SSH alias
+(default: `home-security-pi`). See `docs/raspberry-pi.md` for the full setup
+flow including SSH alias scheme and prerequisites.
 
 ```sh
-./tools/bootstrap-pi-systemd.sh   # once per Pi
-./tools/deploy-pi.sh              # normal deploy
+HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/bootstrap-pi-systemd.sh   # once per Pi
+HOME_SECURITY_PI_HOST=home-security-pi<hostname> ./tools/deploy-pi.sh              # normal deploy
 ```
 
 The remote code directory is `~/home-security-pi` and is managed with `rsync --delete`. Keep runtime state, logs, config, observations, captures, and caches outside it.
