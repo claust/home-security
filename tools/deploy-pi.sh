@@ -23,10 +23,10 @@ ssh "$HOST" "set -eu
     echo 'uv is not installed on the Raspberry Pi. Install uv first, then rerun this deploy script.' >&2
     exit 2
   fi
-  uv sync --frozen
+  uv sync --frozen --no-dev
   sudo -n /usr/bin/install -m 0755 \"\$PWD/sbin/home-security-apply-systemd\" /usr/local/sbin/home-security-apply-systemd
   sudo -n /usr/local/sbin/home-security-apply-systemd
-  uv run home-security-pi-verify --output run-results/latest.json
+  uv run --no-dev home-security-pi-verify --output run-results/latest.json
   sudo -n /usr/bin/systemctl restart home-security-bluetooth-power.service
   printf '\nSaved result on Pi: ~/%s\n' '$REMOTE_DIR/run-results/latest.json'
   printf '\nVerification result read back from Pi:\n'

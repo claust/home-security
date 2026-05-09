@@ -9,7 +9,7 @@ Type=simple
 User=@HOME_SECURITY_PI_USER@
 WorkingDirectory=@HOME_SECURITY_PI_CODE_DIR@
 Environment=PATH=@HOME_SECURITY_PI_HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/env uv run home-security-pi-ble-observe --database @HOME_SECURITY_PI_STATE_DIR@/observations.sqlite3 --min-interval-seconds 60
+ExecStart=/usr/bin/env uv run --no-dev home-security-pi-ble-observe --database @HOME_SECURITY_PI_STATE_DIR@/observations.sqlite3 --min-interval-seconds 60
 Restart=always
 RestartSec=5
 

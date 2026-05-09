@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from home_security_pi.ble_scan import (
     AdvertisementLike,
@@ -18,7 +18,6 @@ from home_security_pi.ble_scan import (
     BLEScanUnavailable,
     normalize_seen_device,
 )
-
 
 DEFAULT_DATABASE = Path.home() / ".local/state/home-security/observations.sqlite3"
 

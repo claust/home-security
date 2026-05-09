@@ -71,7 +71,11 @@ class BLEObserveTests(unittest.TestCase):
 
             first = build_observation(
                 FakeDevice(address="AA:BB:CC:DD:EE:FF", name="Device"),
-                FakeAdvertisement(local_name="Advertised", service_uuids=["180f"], rssi=-70),
+                FakeAdvertisement(
+                    local_name="Advertised",
+                    service_uuids=["180f"],
+                    rssi=-70,
+                ),
                 observed_at_utc=clock(),
                 hostname="test-host",
             )
@@ -80,7 +84,11 @@ class BLEObserveTests(unittest.TestCase):
             clock.current = started_at + timedelta(seconds=59)
             duplicate = build_observation(
                 FakeDevice(address="AA:BB:CC:DD:EE:FF", name="Device"),
-                FakeAdvertisement(local_name="Advertised", service_uuids=["180f"], rssi=-68),
+                FakeAdvertisement(
+                    local_name="Advertised",
+                    service_uuids=["180f"],
+                    rssi=-68,
+                ),
                 observed_at_utc=clock(),
                 hostname="test-host",
             )
@@ -89,7 +97,11 @@ class BLEObserveTests(unittest.TestCase):
             clock.current = started_at + timedelta(seconds=60)
             later = build_observation(
                 FakeDevice(address="AA:BB:CC:DD:EE:FF", name="Device"),
-                FakeAdvertisement(local_name="Advertised", service_uuids=["180f"], rssi=-65),
+                FakeAdvertisement(
+                    local_name="Advertised",
+                    service_uuids=["180f"],
+                    rssi=-65,
+                ),
                 observed_at_utc=clock(),
                 hostname="test-host",
             )

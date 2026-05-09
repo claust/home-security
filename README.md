@@ -54,6 +54,22 @@ Current runtime output:
 - verification: `~/home-security-pi/run-results/latest.json`
 - continuous BLE observations: `~/.local/state/home-security/observations.sqlite3`
 
+## Development Checks
+
+Install the commit hook once per checkout:
+
+```sh
+cd pi
+uv run pre-commit install --config ../.pre-commit-config.yaml
+```
+
+Run the same checks manually:
+
+```sh
+cd pi
+uv run pre-commit run --config ../.pre-commit-config.yaml --all-files
+```
+
 ## Services
 
 - `bluetooth.service`: OS BlueZ service.
