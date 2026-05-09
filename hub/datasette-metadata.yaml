@@ -12,6 +12,8 @@ description_html: |
     <li><a href="/archive/hourly_activity">Hourly activity</a> — observations per scanner per UTC hour</li>
     <li><a href="/archive/vendor_summary">Vendor summary</a> — manufacturer breakdown joined to the Bluetooth SIG company-ID list</li>
     <li><a href="/archive/manufacturer_breakdown">Manufacturer breakdown</a> — one row per (observation × company ID) with vendor names</li>
+    <li><a href="/archive/service_summary">Service-UUID summary</a> — advertised service UUIDs joined to the Bluetooth SIG service / member list</li>
+    <li><a href="/archive/service_breakdown">Service-UUID breakdown</a> — one row per (observation × service UUID) with names</li>
     <li><a href="/archive/apple_device_types">Apple device types</a> — Continuity type byte for Apple (0x004C) advertisements</li>
     <li><a href="/archive/address_history">Address history</a> — full timeline for a given BLE address</li>
   </ul>
@@ -54,53 +56,210 @@ databases:
 
       seen_by_both:
         title: Addresses seen by both monitors
-        description: Devices observed by more than one scanner — candidates for movement between locations.
+        description: |-
+          Devices observed by more than one scanner — candidates for
+          movement between locations. <code>vendors</code> unions
+          manufacturer-data company IDs (from
+          <code>company_identifiers</code>) with member-assigned
+          16-bit service UUIDs (kind = <code>member</code> in
+          <code>service_uuids</code>); both identify the maker.
+          <code>services</code> shows only SIG-defined GATT services
+          (kind = <code>sig</code>) — i.e. functional services like
+          Battery or HID. Unknown 16-bit company IDs render as
+          <code>0xNNNN</code>; full 128-bit vendor service UUIDs are
+          omitted from the services list.
         sql: |-
+          WITH vendors_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(vendor, ' | ') AS vendors
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                COALESCE(c.name, '0x' || m.key) AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.manufacturer_data_json) m
+              LEFT JOIN company_identifiers c
+                ON c.company_id_hex = m.key
+              UNION
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'member'
+            )
+            GROUP BY address_observed
+          ),
+          services_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(service, ' | ') AS services
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS service
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'sig'
+            )
+            GROUP BY address_observed
+          )
           SELECT
-            address_observed,
-            MAX(name) AS name,
-            MAX(local_name) AS local_name,
+            o.address_observed,
+            MAX(o.name) AS name,
+            MAX(o.local_name) AS local_name,
+            v.vendors,
+            sv.services,
             COUNT(*) AS observations,
-            COUNT(DISTINCT scanner_id) AS scanners,
-            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
-            MIN(observed_at_utc) AS first_observed,
-            MAX(observed_at_utc) AS last_observed
-          FROM ble_address_observations
-          GROUP BY address_observed
-          HAVING COUNT(DISTINCT scanner_id) > 1
+            COUNT(DISTINCT o.scanner_id) AS scanners,
+            GROUP_CONCAT(DISTINCT o.scanner_id) AS seen_on,
+            MIN(o.observed_at_utc) AS first_observed,
+            MAX(o.observed_at_utc) AS last_observed
+          FROM ble_address_observations o
+          LEFT JOIN vendors_per_address v ON v.address_observed = o.address_observed
+          LEFT JOIN services_per_address sv ON sv.address_observed = o.address_observed
+          GROUP BY o.address_observed
+          HAVING COUNT(DISTINCT o.scanner_id) > 1
           ORDER BY observations DESC
 
       most_observed:
         title: Most-observed addresses
-        description: Top 100 BLE addresses ranked by total observations across all scanners.
+        description: |-
+          Top 100 BLE addresses ranked by total observations across
+          all scanners. <code>vendors</code> and <code>services</code>
+          come from the same lookup tables as
+          <a href="/archive/seen_by_both">seen_by_both</a>.
         sql: |-
+          WITH vendors_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(vendor, ' | ') AS vendors
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                COALESCE(c.name, '0x' || m.key) AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.manufacturer_data_json) m
+              LEFT JOIN company_identifiers c
+                ON c.company_id_hex = m.key
+              UNION
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'member'
+            )
+            GROUP BY address_observed
+          ),
+          services_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(service, ' | ') AS services
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS service
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'sig'
+            )
+            GROUP BY address_observed
+          )
           SELECT
-            address_observed,
-            MAX(name) AS name,
-            MAX(local_name) AS local_name,
+            o.address_observed,
+            MAX(o.name) AS name,
+            MAX(o.local_name) AS local_name,
+            v.vendors,
+            sv.services,
             COUNT(*) AS observations,
-            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
-            MIN(observed_at_utc) AS first_observed,
-            MAX(observed_at_utc) AS last_observed
-          FROM ble_address_observations
-          GROUP BY address_observed
+            GROUP_CONCAT(DISTINCT o.scanner_id) AS seen_on,
+            MIN(o.observed_at_utc) AS first_observed,
+            MAX(o.observed_at_utc) AS last_observed
+          FROM ble_address_observations o
+          LEFT JOIN vendors_per_address v ON v.address_observed = o.address_observed
+          LEFT JOIN services_per_address sv ON sv.address_observed = o.address_observed
+          GROUP BY o.address_observed
           ORDER BY observations DESC
           LIMIT 100
 
       named_devices:
         title: Named devices
-        description: Addresses that have ever advertised a name or local_name, sorted by most recently seen.
+        description: |-
+          Addresses that have ever advertised a name or local_name,
+          sorted by most recently seen. <code>vendors</code> and
+          <code>services</code> come from the same lookup tables as
+          <a href="/archive/seen_by_both">seen_by_both</a>.
         sql: |-
+          WITH vendors_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(vendor, ' | ') AS vendors
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                COALESCE(c.name, '0x' || m.key) AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.manufacturer_data_json) m
+              LEFT JOIN company_identifiers c
+                ON c.company_id_hex = m.key
+              UNION
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS vendor
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'member'
+            )
+            GROUP BY address_observed
+          ),
+          services_per_address AS (
+            SELECT address_observed, GROUP_CONCAT(service, ' | ') AS services
+            FROM (
+              SELECT DISTINCT
+                o.address_observed,
+                u.name AS service
+              FROM ble_address_observations o,
+                   json_each(o.service_uuids_json) s
+              JOIN service_uuids u
+                ON u.uuid_hex = CASE
+                  WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                    THEN substr(lower(s.value), 5, 4)
+                END
+              WHERE u.kind = 'sig'
+            )
+            GROUP BY address_observed
+          )
           SELECT
-            address_observed,
-            MAX(name) AS name,
-            MAX(local_name) AS local_name,
-            GROUP_CONCAT(DISTINCT scanner_id) AS seen_on,
+            o.address_observed,
+            MAX(o.name) AS name,
+            MAX(o.local_name) AS local_name,
+            v.vendors,
+            sv.services,
+            GROUP_CONCAT(DISTINCT o.scanner_id) AS seen_on,
             COUNT(*) AS observations,
-            MAX(observed_at_utc) AS last_observed
-          FROM ble_address_observations
-          WHERE name IS NOT NULL OR local_name IS NOT NULL
-          GROUP BY address_observed
+            MAX(o.observed_at_utc) AS last_observed
+          FROM ble_address_observations o
+          LEFT JOIN vendors_per_address v ON v.address_observed = o.address_observed
+          LEFT JOIN services_per_address sv ON sv.address_observed = o.address_observed
+          WHERE o.name IS NOT NULL OR o.local_name IS NOT NULL
+          GROUP BY o.address_observed
           ORDER BY last_observed DESC
 
       hourly_activity:
@@ -157,6 +316,76 @@ databases:
                json_each(o.manufacturer_data_json) m
           LEFT JOIN company_identifiers c
             ON c.company_id_hex = m.key
+          ORDER BY o.observed_at_utc DESC
+          LIMIT 500
+
+      service_summary:
+        title: Service-UUID summary
+        description: |-
+          BLE advertisers grouped by advertised service UUID. Names
+          come from the <code>service_uuids</code> table, refreshed
+          by <code>tools/home-security-vendors-refresh</code> from the
+          Bluetooth SIG <code>service_uuids.yaml</code> (kind =
+          <code>sig</code>, e.g. 0x180F Battery) and
+          <code>member_uuids.yaml</code> (kind = <code>member</code>,
+          e.g. 0xFD6F Apple Exposure Notification). Only 16-bit
+          short-form UUIDs derived from the SIG base UUID
+          <code>xxxxxxxx-0000-1000-8000-00805f9b34fb</code> are
+          named; full 128-bit vendor UUIDs show as <code>(unknown)</code>.
+        sql: |-
+          WITH advertised AS (
+            SELECT
+              o.address_observed,
+              lower(s.value) AS service_uuid_full,
+              CASE
+                WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                  THEN substr(lower(s.value), 5, 4)
+              END AS short_uuid_hex
+            FROM ble_address_observations o,
+                 json_each(o.service_uuids_json) s
+          )
+          SELECT
+            a.service_uuid_full,
+            a.short_uuid_hex,
+            COALESCE(u.name, '(unknown)') AS service_name,
+            COALESCE(u.kind, '') AS kind,
+            COUNT(*) AS observations,
+            COUNT(DISTINCT a.address_observed) AS distinct_addresses
+          FROM advertised a
+          LEFT JOIN service_uuids u
+            ON u.uuid_hex = a.short_uuid_hex
+          GROUP BY a.service_uuid_full
+          ORDER BY observations DESC
+
+      service_breakdown:
+        title: Service-UUID breakdown
+        description: |-
+          One row per (observation × advertised service UUID), joined
+          to the named service or member entry in
+          <code>service_uuids</code>. Limited to the 500 most-recent
+          rows.
+        sql: |-
+          SELECT
+            o.observed_at_utc,
+            o.scanner_id,
+            o.address_observed,
+            o.rssi,
+            o.name,
+            o.local_name,
+            lower(s.value) AS service_uuid_full,
+            CASE
+              WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                THEN substr(lower(s.value), 5, 4)
+            END AS short_uuid_hex,
+            COALESCE(u.name, '(unknown)') AS service_name,
+            COALESCE(u.kind, '') AS kind
+          FROM ble_address_observations o,
+               json_each(o.service_uuids_json) s
+          LEFT JOIN service_uuids u
+            ON u.uuid_hex = CASE
+              WHEN lower(s.value) LIKE '0000____-0000-1000-8000-00805f9b34fb'
+                THEN substr(lower(s.value), 5, 4)
+            END
           ORDER BY o.observed_at_utc DESC
           LIMIT 500
 
