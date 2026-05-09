@@ -33,6 +33,10 @@ Each retrieval produces the same pair of files:
 
 The aggregator de-duplicates on the natural key `(scanner_id, observed_at_utc, address_observed)` with `INSERT OR IGNORE`. Overlapping retrieval of the same monitor (e.g., a drive-by followed shortly by a LAN pull) is therefore safe and produces no duplicate rows.
 
+### Pi-side retention
+
+After a successful ingest the hub asks the Pi to delete observations with `observed_at_utc <= snapshot_taken_at_utc`, so each monitor's local SQLite stays bounded instead of growing forever. The Pi enforces a safety floor: rows from the last `--keep-last-days` (default 14) are never deleted, even if the hub's confirmed-ingest watermark is more recent. Pass `--no-prune` to `home-security-hub-fetch` to skip the prune for a given fetch.
+
 ### Path conventions
 
 Same XDG-style layout on every machine:

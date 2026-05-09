@@ -27,6 +27,13 @@ REMOTE_SNAPSHOT_SCRIPT_TEMPLATE = (
     "uv run --no-dev home-security-pi-snapshot{scanner_arg}\n"
 )
 
+REMOTE_PRUNE_SCRIPT_TEMPLATE = (
+    "set -eu\n"
+    'export PATH="$HOME/.local/bin:$PATH"\n'
+    "cd {remote_dir}\n"
+    "uv run --no-dev home-security-pi-prune --before {before_arg}\n"
+)
+
 
 class FetchError(RuntimeError):
     """Raised when a remote fetch cannot complete."""
@@ -40,6 +47,16 @@ class RemoteSnapshotResult:
 
 
 @dataclass(frozen=True)
+class RemotePruneResult:
+    database: str
+    requested_before_utc: str
+    effective_before_utc: str
+    keep_last_days: int
+    rows_deleted: int
+    pruned_at_utc: str
+
+
+@dataclass(frozen=True)
 class FetchSummary:
     host: str
     scanner_id: str
@@ -50,6 +67,7 @@ class FetchSummary:
     manifest: dict
     ingest: IngestResult
     remote_cleanup: bool
+    remote_prune: RemotePruneResult | None
 
 
 def utc_now() -> datetime:
@@ -122,6 +140,70 @@ def run_remote_snapshot(
     return parse_remote_snapshot_output(completed.stdout)
 
 
+def build_remote_prune_script(*, remote_dir: str, before_utc: str) -> str:
+    return REMOTE_PRUNE_SCRIPT_TEMPLATE.format(
+        remote_dir=shlex.quote(remote_dir),
+        before_arg=shlex.quote(before_utc),
+    )
+
+
+def parse_remote_prune_output(stdout: str) -> RemotePruneResult:
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise FetchError(
+            f"Could not parse remote prune JSON.\nOutput was:\n{stdout}"
+        ) from exc
+
+    required = (
+        "database",
+        "requested_before_utc",
+        "effective_before_utc",
+        "keep_last_days",
+        "rows_deleted",
+        "pruned_at_utc",
+    )
+    for key in required:
+        if key not in payload:
+            raise FetchError(f"Remote prune output missing field: {key}")
+
+    return RemotePruneResult(
+        database=str(payload["database"]),
+        requested_before_utc=str(payload["requested_before_utc"]),
+        effective_before_utc=str(payload["effective_before_utc"]),
+        keep_last_days=int(payload["keep_last_days"]),
+        rows_deleted=int(payload["rows_deleted"]),
+        pruned_at_utc=str(payload["pruned_at_utc"]),
+    )
+
+
+def run_remote_prune(
+    *,
+    host: str,
+    remote_dir: str,
+    before_utc: str,
+) -> RemotePruneResult:
+    script = build_remote_prune_script(
+        remote_dir=remote_dir,
+        before_utc=before_utc,
+    )
+    completed = subprocess.run(
+        ["ssh", "-T", host, "bash", "-s"],
+        input=script,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise FetchError(
+            "Remote prune command failed "
+            f"(exit {completed.returncode}).\n"
+            f"stderr:\n{completed.stderr}\n"
+            f"stdout:\n{completed.stdout}"
+        )
+    return parse_remote_prune_output(completed.stdout)
+
+
 def rsync_files(*, host: str, remote_paths: list[str], local_dir: Path) -> None:
     local_dir.mkdir(parents=True, exist_ok=True)
     sources = [f"{host}:{remote_path}" for remote_path in remote_paths]
@@ -174,6 +256,7 @@ def fetch(
     archive_path: Path,
     inbox_dir: Path,
     keep_remote: bool,
+    no_prune: bool,
 ) -> FetchSummary:
     remote_result = run_remote_snapshot(
         host=host,
@@ -215,6 +298,14 @@ def fetch(
         )
         cleaned_remote = True
 
+    prune_result: RemotePruneResult | None = None
+    if not no_prune:
+        prune_result = run_remote_prune(
+            host=host,
+            remote_dir=remote_dir,
+            before_utc=manifest.snapshot_taken_at_utc,
+        )
+
     return FetchSummary(
         host=host,
         scanner_id=effective_scanner_id,
@@ -225,6 +316,7 @@ def fetch(
         manifest=remote_result.manifest,
         ingest=ingest,
         remote_cleanup=cleaned_remote,
+        remote_prune=prune_result,
     )
 
 
@@ -270,6 +362,16 @@ def main() -> None:
         action="store_true",
         help="Do not delete the snapshot pair on the Pi after ingest.",
     )
+    parser.add_argument(
+        "--no-prune",
+        action="store_true",
+        help=(
+            "Skip pruning ingested observation rows on the Pi. "
+            "By default, after a successful ingest the hub asks the Pi to "
+            "delete observations with observed_at_utc <= snapshot_taken_at_utc "
+            "(subject to the Pi's --keep-last-days safety floor)."
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -280,6 +382,7 @@ def main() -> None:
             archive_path=args.archive,
             inbox_dir=args.inbox_dir,
             keep_remote=args.keep_remote,
+            no_prune=args.no_prune,
         )
     except (FetchError, ManifestError) as exc:
         print(str(exc), file=sys.stderr)
@@ -295,6 +398,9 @@ def main() -> None:
         "remote_cleanup": summary.remote_cleanup,
         "manifest": summary.manifest,
         "ingest": asdict(summary.ingest),
+        "remote_prune": (
+            asdict(summary.remote_prune) if summary.remote_prune else None
+        ),
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
 

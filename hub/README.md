@@ -9,7 +9,7 @@ uv run home-security-hub-fetch
 uv run home-security-hub-fetch --host home-security-pi-livingroom
 ```
 
-`home-security-hub-fetch` SSHes to a monitor Pi, invokes `home-security-pi-snapshot` remotely, copies the snapshot and manifest pair to the local inbox, verifies the sha256, and ingests the rows into the archive.
+`home-security-hub-fetch` SSHes to a monitor Pi, invokes `home-security-pi-snapshot` remotely, copies the snapshot and manifest pair to the local inbox, verifies the sha256, and ingests the rows into the archive. After a successful ingest it asks the Pi to prune observations covered by the snapshot (subject to the Pi's `--keep-last-days` safety floor, default 14). Pass `--no-prune` to skip the prune step.
 
 ## Defaults
 
