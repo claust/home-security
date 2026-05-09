@@ -24,8 +24,18 @@ ssh "$HOST" "set -eu
     exit 2
   fi
   uv sync --frozen
+  sudo -n /usr/bin/install -m 0755 \"\$PWD/sbin/home-security-apply-systemd\" /usr/local/sbin/home-security-apply-systemd
+  sudo -n /usr/local/sbin/home-security-apply-systemd
   uv run home-security-pi-verify --output run-results/latest.json
+  sudo -n /usr/bin/systemctl restart home-security-bluetooth-power.service
+  sudo -n /usr/bin/systemctl restart home-security-ble-startup-scan.service
   printf '\nSaved result on Pi: ~/%s\n' '$REMOTE_DIR/run-results/latest.json'
-  printf '\nResult read back from Pi:\n'
+  printf '\nVerification result read back from Pi:\n'
   cat run-results/latest.json
+  printf '\nBluetooth power service status:\n'
+  systemctl --no-pager --full status home-security-bluetooth-power.service || true
+  printf '\nBLE startup scan service status:\n'
+  systemctl --no-pager --full status home-security-ble-startup-scan.service || true
+  printf '\nBLE startup scan result read back from Pi:\n'
+  cat \"\$HOME/.local/state/home-security/ble-startup.json\"
 "

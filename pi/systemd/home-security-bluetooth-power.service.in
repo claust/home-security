@@ -1,0 +1,13 @@
+[Unit]
+Description=Power on Bluetooth adapter for Home Security
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/sbin/rfkill unblock bluetooth
+ExecStart=-/usr/bin/bluetoothctl power on
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target

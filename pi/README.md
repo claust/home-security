@@ -1,23 +1,39 @@
 # Raspberry Pi Software
 
-This directory contains the Python software intended to run on the Raspberry Pi monitoring node.
+Python package and systemd assets for the Raspberry Pi monitoring node.
 
-The first milestone is intentionally small: deploy this package to the Pi, run a verification command there, and read back the result. The command writes only basic host/runtime metadata and does not collect device observations.
-
-## Local Commands
+## Commands
 
 ```sh
 uv run home-security-pi-verify
+uv run home-security-pi-ble-scan --timeout 10
 ```
+
+`home-security-pi-ble-scan` passively listens for BLE advertisements. It does not connect, pair, spoof, jam, deauthenticate, or transmit attack traffic.
+
+## Services
+
+`systemd/` contains templates installed by `sbin/home-security-apply-systemd`:
+
+- `home-security-bluetooth-power.service`: unblocks Bluetooth with `/usr/sbin/rfkill unblock bluetooth`, then asks `bluetoothctl` to power on the adapter.
+- `home-security-ble-startup-scan.service`: writes `~/.local/state/home-security/ble-startup.json`.
 
 ## Deployment
 
 From the repository root:
 
 ```sh
-./tools/deploy-pi.sh
+./tools/bootstrap-pi-systemd.sh   # once per Pi
+./tools/deploy-pi.sh              # normal deploy
 ```
 
-The deploy script syncs this directory to `~/home-security-pi` on `home-security-pi`, runs `uv sync --frozen`, executes the verification command, and prints the result JSON.
+The remote code directory is `~/home-security-pi` and is managed with `rsync --delete`. Keep runtime state, logs, config, observations, captures, and caches outside it.
 
-The remote deploy directory is code-only. Runtime state, config, logs, observations, captures, and caches should live outside it.
+Useful Bluetooth checks on the Pi:
+
+```sh
+/usr/sbin/rfkill list
+bluetoothctl show
+systemctl status home-security-bluetooth-power.service
+systemctl status home-security-ble-startup-scan.service
+```

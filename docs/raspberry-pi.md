@@ -39,3 +39,14 @@ Use separate locations for future runtime data, such as:
 - `~/.config/home-security/` for user config
 - `~/.local/state/home-security/` for user-level state
 - `/var/lib/home-security/` if the project later adds a system service
+
+## Bootstrap And Deploy
+
+From the repository root:
+
+```sh
+./tools/bootstrap-pi-systemd.sh   # once per Pi
+./tools/deploy-pi.sh              # normal deploy
+```
+
+Bootstrap installs narrow sudo permissions for the deploy helper and service restarts. Deploys should be non-interactive after bootstrap.

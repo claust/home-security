@@ -4,9 +4,12 @@ version = "0.1.0"
 description = "Raspberry Pi monitoring node scripts for home-security."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "bleak>=0.22.3",
+]
 
 [project.scripts]
+home-security-pi-ble-scan = "home_security_pi.ble_scan:main"
 home-security-pi-verify = "home_security_pi.verify:main"
 
 [build-system]

@@ -1,0 +1,14 @@
+[Unit]
+Description=Home Security BLE startup scan
+After=home-security-bluetooth-power.service
+Requires=home-security-bluetooth-power.service
+
+[Service]
+Type=oneshot
+User=@HOME_SECURITY_PI_USER@
+WorkingDirectory=@HOME_SECURITY_PI_CODE_DIR@
+Environment=PATH=@HOME_SECURITY_PI_HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env uv run home-security-pi-ble-scan --timeout 30 --output @HOME_SECURITY_PI_STATE_DIR@/ble-startup.json
+
+[Install]
+WantedBy=multi-user.target
