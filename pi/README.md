@@ -7,16 +7,18 @@ Python package and systemd assets for the Raspberry Pi monitoring node.
 ```sh
 uv run home-security-pi-verify
 uv run home-security-pi-ble-scan --timeout 10
+uv run home-security-pi-ble-observe
 ```
 
 `home-security-pi-ble-scan` passively listens for BLE advertisements. It does not connect, pair, spoof, jam, deauthenticate, or transmit attack traffic.
+`home-security-pi-ble-observe` runs continuously and records BLE addresses observed to `~/.local/state/home-security/observations.sqlite3`.
 
 ## Services
 
 `systemd/` contains templates installed by `sbin/home-security-apply-systemd`:
 
 - `home-security-bluetooth-power.service`: unblocks Bluetooth with `/usr/sbin/rfkill unblock bluetooth`, then asks `bluetoothctl` to power on the adapter.
-- `home-security-ble-startup-scan.service`: writes `~/.local/state/home-security/ble-startup.json`.
+- `home-security-ble-observer.service`: continuously records BLE address observations to `~/.local/state/home-security/observations.sqlite3`.
 
 ## Deployment
 
@@ -35,5 +37,5 @@ Useful Bluetooth checks on the Pi:
 /usr/sbin/rfkill list
 bluetoothctl show
 systemctl status home-security-bluetooth-power.service
-systemctl status home-security-ble-startup-scan.service
+systemctl status home-security-ble-observer.service
 ```

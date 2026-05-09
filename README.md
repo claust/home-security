@@ -11,7 +11,8 @@ The working path is a Raspberry Pi monitoring node:
 - Pi code lives in `pi/` and is managed with `uv`.
 - `home-security-pi-verify` writes host/runtime metadata.
 - `home-security-pi-ble-scan` passively scans BLE advertisements and writes JSON.
-- systemd runs a boot-time BLE scan into `~/.local/state/home-security/ble-startup.json`.
+- `home-security-pi-ble-observe` continuously records BLE addresses observed to SQLite.
+- systemd keeps a continuous BLE observer running against `~/.local/state/home-security/observations.sqlite3`.
 - `tools/deploy-pi.sh` syncs code, installs services, restarts them, and reads back status/results.
 
 ## Layout
@@ -51,13 +52,13 @@ Deployment syncs `pi/` to `~/home-security-pi` with `rsync --delete`. That direc
 Current runtime output:
 
 - verification: `~/home-security-pi/run-results/latest.json`
-- startup BLE scan: `~/.local/state/home-security/ble-startup.json`
+- continuous BLE observations: `~/.local/state/home-security/observations.sqlite3`
 
 ## Services
 
 - `bluetooth.service`: OS BlueZ service.
 - `home-security-bluetooth-power.service`: clears Bluetooth rfkill soft blocks and asks BlueZ to power on the adapter.
-- `home-security-ble-startup-scan.service`: runs one BLE scan after Bluetooth setup.
+- `home-security-ble-observer.service`: continuously records BLE addresses observed with a one-minute minimum interval per address.
 
 The bootstrap script installs narrow sudo permissions so normal deploys can run non-interactively with `sudo -n`.
 

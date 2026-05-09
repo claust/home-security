@@ -57,11 +57,15 @@ render_unit \
   home-security-bluetooth-power.service
 
 render_unit \
-  home-security-ble-startup-scan.service.in \
-  home-security-ble-startup-scan.service
+  home-security-ble-observer.service.in \
+  home-security-ble-observer.service
 
 if [ "${HOME_SECURITY_PI_SKIP_SYSTEMCTL:-0}" != "1" ]; then
+  systemctl disable --now home-security-ble-startup-scan.service 2>/dev/null || true
+  systemctl reset-failed home-security-ble-startup-scan.service 2>/dev/null || true
+  rm -f "$SYSTEMD_DIR/home-security-ble-startup-scan.service"
   systemctl daemon-reload
   systemctl enable home-security-bluetooth-power.service
-  systemctl enable home-security-ble-startup-scan.service
+  systemctl enable home-security-ble-observer.service
+  systemctl restart home-security-ble-observer.service
 fi

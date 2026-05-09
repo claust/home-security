@@ -25,7 +25,7 @@ ssh -t "$HOST" "set -eu
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/install -m 0755 \$CODE_DIR/sbin/home-security-apply-systemd /usr/local/sbin/home-security-apply-systemd
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/local/sbin/home-security-apply-systemd
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-bluetooth-power.service
-\$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-ble-startup-scan.service
+\$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-ble-observer.service
 EOF
 
   sudo visudo -cf \"\$SUDOERS_TMP\"
@@ -36,7 +36,7 @@ EOF
   cd \"\$CODE_DIR\"
   sudo -n /usr/local/sbin/home-security-apply-systemd
   sudo -n /usr/bin/systemctl restart home-security-bluetooth-power.service
-  sudo -n /usr/bin/systemctl restart home-security-ble-startup-scan.service
+  sudo -n /usr/bin/systemctl restart home-security-ble-observer.service
 
   printf 'Bootstrap complete. Future ./tools/deploy-pi.sh runs should be non-interactive.\n'
 "
