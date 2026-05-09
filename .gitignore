@@ -1,0 +1,5 @@
+.uv-cache/
+__pycache__/
+*.py[cod]
+pi/.venv/
+pi/run-results/
