@@ -4,8 +4,22 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^(pi|hub)/
+        files: ^(pi|hub|api)/
         types_or: [python, pyi]
       - id: ruff-format
-        files: ^(pi|hub)/
+        files: ^(pi|hub|api)/
         types_or: [python, pyi]
+  - repo: local
+    hooks:
+      - id: web-check
+        name: web format + lint (oxfmt + oxlint)
+        entry: pnpm -C web check
+        language: system
+        files: ^web/
+        pass_filenames: false
+      - id: web-typecheck
+        name: web typecheck (tsgo)
+        entry: pnpm -C web typecheck
+        language: system
+        files: ^web/
+        pass_filenames: false

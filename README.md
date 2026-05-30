@@ -68,6 +68,7 @@ The working path is a Raspberry Pi monitoring node:
 - `tools/deploy-pi` syncs code, installs services, restarts them, and reads back status/results.
 - Hub code lives in `hub/` and is managed with `uv`.
 - `home-security-hub-fetch` SSHes to a monitor Pi, invokes the snapshot helper, copies the snapshot+manifest pair into `~/.local/state/home-security/inbox/<scanner_id>/`, verifies the sha256, and ingests the rows into `~/.local/state/home-security/archive.sqlite3`.
+- API code lives in `api/` and is managed with `uv`. `home-security-api` serves a read-only FastAPI/Pydantic HTTP API over the consolidated archive on `127.0.0.1:8002` with OpenAPI docs at `/docs`.
 
 ## Layout
 
@@ -84,6 +85,10 @@ The working path is a Raspberry Pi monitoring node:
 │   ├── pyproject.toml
 │   ├── uv.lock
 │   └── src/home_security_hub/
+├── api/
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   └── src/home_security_api/
 └── tools/
     ├── bootstrap-pi-systemd
     └── deploy-pi

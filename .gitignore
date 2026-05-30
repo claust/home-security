@@ -4,3 +4,5 @@ __pycache__/
 pi/.venv/
 pi/run-results/
 LOCAL-PIS.md
+.claude/scheduled_tasks.lock
+.claude/settings.local.json

@@ -1,0 +1,83 @@
+#!/usr/bin/env sh
+set -eu
+
+# Fetch + ingest snapshots from every configured monitor Pi into the hub
+# archive, then post a Notification Center summary. Designed to be driven by a
+# launchd LaunchAgent on the hub, but runs fine by hand too.
+#
+# Config (environment):
+#   HOME_SECURITY_PI_HOSTS   space-separated SSH aliases (required)
+#                            e.g. "home-security-pi-livingroom home-security-pi-frontyard"
+#   HOME_SECURITY_STATE_DIR  state dir (default ~/.local/state/home-security)
+#   UV_BIN                   path to uv (default: whatever is on PATH)
+#   HOME_SECURITY_NO_NOTIFY  set to skip the desktop notification
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_DIR="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
+HUB_DIR="$REPO_DIR/hub"
+
+HOSTS="${HOME_SECURITY_PI_HOSTS:?HOME_SECURITY_PI_HOSTS must be set (space-separated SSH aliases)}"
+STATE_DIR="${HOME_SECURITY_STATE_DIR:-$HOME/.local/state/home-security}"
+LOG_DIR="$STATE_DIR/logs"
+LOG_FILE="$LOG_DIR/hub-fetch.log"
+UV="${UV_BIN:-uv}"
+
+mkdir -p "$LOG_DIR"
+
+ts() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+log() { printf '%s %s\n' "$(ts)" "$*" >>"$LOG_FILE"; }
+
+# Turn one host's fetch JSON into a compact, notification-safe fragment
+# (host name + numbers only; no quotes/newlines that could break AppleScript).
+fragment() {
+  /usr/bin/python3 - "$1" <<'PY'
+import sys, json
+try:
+    d = json.loads(sys.argv[1])
+except Exception:
+    print("parse-error")
+    sys.exit(0)
+sid = d.get("scanner_id", "?")
+ins = (d.get("ingest") or {}).get("rows_inserted", 0)
+prune = d.get("remote_prune") or {}
+deleted = prune.get("rows_deleted")
+frag = f"{sid} +{ins:,} new"
+if deleted is not None:
+    frag += f", {deleted:,} pruned"
+print(frag)
+PY
+}
+
+log "=== daily hub fetch starting: hosts=[$HOSTS] ==="
+SUMMARY=""
+SEP=""
+FAILURES=0
+for HOST in $HOSTS; do
+  log "--- fetching $HOST ---"
+  if OUT=$("$UV" run --project "$HUB_DIR" home-security-hub-fetch --host "$HOST" 2>>"$LOG_FILE"); then
+    printf '%s\n' "$OUT" >>"$LOG_FILE"
+    FRAG=$(fragment "$OUT")
+  else
+    log "FETCH FAILED for $HOST"
+    FRAG="$HOST FAILED"
+    FAILURES=$((FAILURES + 1))
+  fi
+  SUMMARY="$SUMMARY$SEP$FRAG"
+  SEP=" · "
+done
+log "=== daily hub fetch done (failures=$FAILURES) ==="
+
+# Desktop notification. Banners posted via osascript are attributed to the
+# scripting host (e.g. "Script Editor"); allow them in System Settings >
+# Notifications the first time if you don't see them.
+if [ -z "${HOME_SECURITY_NO_NOTIFY:-}" ]; then
+  SUBTITLE="$(date '+%Y-%m-%d %H:%M')"
+  [ "$FAILURES" -gt 0 ] && SUBTITLE="$SUBTITLE — $FAILURES failed"
+  /usr/bin/osascript \
+    -e "on run argv" \
+    -e "display notification (item 1 of argv) with title \"Home Security — daily fetch\" subtitle (item 2 of argv)" \
+    -e "end run" \
+    "$SUMMARY" "$SUBTITLE" >/dev/null 2>&1 || log "notification failed"
+fi
+
+printf '%s\n' "$SUMMARY"
