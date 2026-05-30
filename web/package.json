@@ -1,0 +1,42 @@
+{
+  "name": "home-security-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsgo --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsgo --noEmit",
+    "fmt": "oxfmt .",
+    "lint": "oxlint",
+    "check": "oxfmt . && oxlint --fix",
+    "verify": "pnpm check && pnpm typecheck",
+    "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.100.14",
+    "openapi-fetch": "^0.17.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router": "^7.16.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.9.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260527.2",
+    "@vitejs/plugin-react": "^6.0.2",
+    "openapi-typescript": "^7.13.0",
+    "oxfmt": "^0.52.0",
+    "oxlint": "^1.67.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.5.0"
+}
