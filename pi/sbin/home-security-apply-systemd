@@ -47,6 +47,21 @@ if [ -f "$WIFI_MARKER" ]; then
   WIFI_INTERFACE="$(tr -d '[:space:]' < "$WIFI_MARKER")"
 fi
 
+# Re-validate the marker contents before interpolating them into the systemd
+# unit template (via sed) and the NetworkManager drop-in. This script runs as
+# root and the marker is a user-writable file, so reject anything that is not a
+# plain interface name — defending against sed/template-substitution injection
+# and corrupted markers even though bootstrap already validated the value.
+if [ -n "$WIFI_INTERFACE" ]; then
+  case "$WIFI_INTERFACE" in
+    [!A-Za-z0-9]* | *[!A-Za-z0-9._-]*)
+      echo "Refusing to enable Wi-Fi monitor: invalid interface name in" \
+        "$WIFI_MARKER: '$WIFI_INTERFACE'. Expected a plain name like 'wlan1'." >&2
+      exit 2
+      ;;
+  esac
+fi
+
 render_unit() {
   src="$1"
   dest="$2"
