@@ -1,0 +1,71 @@
+#!/usr/bin/env sh
+set -eu
+
+CODE_DIR="${HOME_SECURITY_PI_CODE_DIR:-$(pwd)}"
+DEPLOY_USER="${HOME_SECURITY_PI_USER:-${SUDO_USER:-}}"
+
+if [ -z "$DEPLOY_USER" ]; then
+  echo "HOME_SECURITY_PI_USER or SUDO_USER is required." >&2
+  exit 2
+fi
+
+if [ -n "${HOME_SECURITY_PI_HOME:-}" ]; then
+  DEPLOY_HOME="$HOME_SECURITY_PI_HOME"
+else
+  DEPLOY_HOME="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+fi
+
+if [ -n "${HOME_SECURITY_PI_GROUP:-}" ]; then
+  DEPLOY_GROUP="$HOME_SECURITY_PI_GROUP"
+else
+  DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
+fi
+
+STATE_DIR="${HOME_SECURITY_PI_STATE_DIR:-$DEPLOY_HOME/.local/state/home-security}"
+SYSTEMD_DIR="${HOME_SECURITY_PI_SYSTEMD_DIR:-/etc/systemd/system}"
+
+if [ ! -d "$CODE_DIR/systemd" ]; then
+  echo "Missing systemd templates in $CODE_DIR/systemd." >&2
+  exit 2
+fi
+
+if [ "$(id -u)" = "0" ]; then
+  install -d -o "$DEPLOY_USER" -g "$DEPLOY_GROUP" "$STATE_DIR"
+else
+  install -d "$STATE_DIR"
+fi
+install -d "$SYSTEMD_DIR"
+
+render_unit() {
+  src="$1"
+  dest="$2"
+  tmp="/tmp/$dest.$$"
+
+  sed \
+    -e "s|@HOME_SECURITY_PI_USER@|$DEPLOY_USER|g" \
+    -e "s|@HOME_SECURITY_PI_HOME@|$DEPLOY_HOME|g" \
+    -e "s|@HOME_SECURITY_PI_CODE_DIR@|$CODE_DIR|g" \
+    -e "s|@HOME_SECURITY_PI_STATE_DIR@|$STATE_DIR|g" \
+    "$CODE_DIR/systemd/$src" > "$tmp"
+
+  install -m 0644 "$tmp" "$SYSTEMD_DIR/$dest"
+  rm -f "$tmp"
+}
+
+render_unit \
+  home-security-bluetooth-power.service.in \
+  home-security-bluetooth-power.service
+
+render_unit \
+  home-security-ble-observer.service.in \
+  home-security-ble-observer.service
+
+if [ "${HOME_SECURITY_PI_SKIP_SYSTEMCTL:-0}" != "1" ]; then
+  systemctl disable --now home-security-ble-startup-scan.service 2>/dev/null || true
+  systemctl reset-failed home-security-ble-startup-scan.service 2>/dev/null || true
+  rm -f "$SYSTEMD_DIR/home-security-ble-startup-scan.service"
+  systemctl daemon-reload
+  systemctl enable home-security-bluetooth-power.service
+  systemctl enable home-security-ble-observer.service
+  systemctl restart home-security-ble-observer.service
+fi

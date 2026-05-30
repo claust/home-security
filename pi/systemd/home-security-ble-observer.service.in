@@ -1,0 +1,17 @@
+[Unit]
+Description=Home Security BLE address observer
+After=home-security-bluetooth-power.service
+Requires=home-security-bluetooth-power.service
+PartOf=home-security-bluetooth-power.service
+
+[Service]
+Type=simple
+User=@HOME_SECURITY_PI_USER@
+WorkingDirectory=@HOME_SECURITY_PI_CODE_DIR@
+Environment=PATH=@HOME_SECURITY_PI_HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env uv run --no-dev home-security-pi-ble-observe --database @HOME_SECURITY_PI_STATE_DIR@/observations.sqlite3 --min-interval-seconds 60
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

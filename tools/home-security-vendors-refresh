@@ -1,0 +1,136 @@
+#!/usr/bin/env -S uv run --quiet --no-project --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6"]
+# ///
+"""Refresh Bluetooth SIG assigned-number lookup tables.
+
+Fetches three YAML files from the SIG's public assigned-numbers repo and
+writes (or rewrites) lookup tables inside the consolidated archive at
+~/.local/state/home-security/archive.sqlite3:
+
+- company_identifiers   — manufacturer-data company IDs (16-bit)
+- service_uuids         — both SIG-defined GATT services and member-assigned
+                          16-bit service UUIDs, in one table with a `kind`
+                          column ('sig' or 'member')
+
+Override the archive path with HOME_SECURITY_ARCHIVE.
+"""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+import sys
+import urllib.request
+from pathlib import Path
+
+import yaml
+
+BASE_URL = "https://bitbucket.org/bluetooth-SIG/public/raw/main/assigned_numbers"
+COMPANY_IDENTIFIERS_URL = f"{BASE_URL}/company_identifiers/company_identifiers.yaml"
+SERVICE_UUIDS_URL = f"{BASE_URL}/uuids/service_uuids.yaml"
+MEMBER_UUIDS_URL = f"{BASE_URL}/uuids/member_uuids.yaml"
+
+DEFAULT_ARCHIVE = Path.home() / ".local/state/home-security/archive.sqlite3"
+
+
+def _fetch_yaml(url: str) -> dict:
+    print(f"Fetching {url}", file=sys.stderr)
+    with urllib.request.urlopen(url) as response:
+        return yaml.safe_load(response.read())
+
+
+def _parse_company_identifiers(document: dict) -> list[tuple[int, str, str]]:
+    return [
+        (int(entry["value"]), f"{int(entry['value']):04x}", str(entry["name"]))
+        for entry in document["company_identifiers"]
+    ]
+
+
+def _parse_uuid_assignments(
+    document: dict, kind: str
+) -> list[tuple[int, str, str, str, str | None]]:
+    rows: list[tuple[int, str, str, str, str | None]] = []
+    for entry in document["uuids"]:
+        value = int(entry["uuid"], 0) if isinstance(entry["uuid"], str) else int(entry["uuid"])
+        identifier = entry.get("id")
+        rows.append(
+            (
+                value,
+                f"{value:04x}",
+                str(entry["name"]),
+                kind,
+                str(identifier) if identifier is not None else None,
+            )
+        )
+    return rows
+
+
+def main() -> None:
+    archive_path = Path(os.environ.get("HOME_SECURITY_ARCHIVE", DEFAULT_ARCHIVE))
+    if not archive_path.exists():
+        print(
+            f"Archive not found at {archive_path}. "
+            "Run 'uv run home-security-hub-fetch' first.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    company_rows = _parse_company_identifiers(_fetch_yaml(COMPANY_IDENTIFIERS_URL))
+    print(f"Parsed {len(company_rows)} company identifiers", file=sys.stderr)
+
+    service_rows = _parse_uuid_assignments(_fetch_yaml(SERVICE_UUIDS_URL), "sig")
+    print(f"Parsed {len(service_rows)} SIG service UUIDs", file=sys.stderr)
+
+    member_rows = _parse_uuid_assignments(_fetch_yaml(MEMBER_UUIDS_URL), "member")
+    print(f"Parsed {len(member_rows)} member service UUIDs", file=sys.stderr)
+
+    uuid_rows = service_rows + member_rows
+
+    with sqlite3.connect(archive_path) as connection:
+        connection.executescript(
+            """
+            DROP TABLE IF EXISTS company_identifiers;
+            CREATE TABLE company_identifiers (
+              company_id INTEGER PRIMARY KEY,
+              company_id_hex TEXT NOT NULL UNIQUE,
+              name TEXT NOT NULL
+            );
+            CREATE INDEX idx_company_identifiers_name
+              ON company_identifiers(name);
+
+            DROP TABLE IF EXISTS service_uuids;
+            CREATE TABLE service_uuids (
+              uuid INTEGER PRIMARY KEY,
+              uuid_hex TEXT NOT NULL UNIQUE,
+              name TEXT NOT NULL,
+              kind TEXT NOT NULL CHECK (kind IN ('sig', 'member')),
+              identifier TEXT
+            );
+            CREATE INDEX idx_service_uuids_name
+              ON service_uuids(name);
+            CREATE INDEX idx_service_uuids_kind
+              ON service_uuids(kind);
+            """
+        )
+        connection.executemany(
+            "INSERT INTO company_identifiers "
+            "(company_id, company_id_hex, name) VALUES (?, ?, ?)",
+            company_rows,
+        )
+        connection.executemany(
+            "INSERT INTO service_uuids "
+            "(uuid, uuid_hex, name, kind, identifier) VALUES (?, ?, ?, ?, ?)",
+            uuid_rows,
+        )
+        connection.commit()
+
+    print(
+        f"Wrote {len(company_rows)} vendors and "
+        f"{len(uuid_rows)} service UUIDs into {archive_path}"
+    )
+
+
+if __name__ == "__main__":
+    main()
