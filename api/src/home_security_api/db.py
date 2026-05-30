@@ -38,7 +38,16 @@ END
 """.strip()
 
 
-VENDORS_PER_ADDRESS_CTE = f"""
+def vendors_per_address_cte(*, scoped: bool = False) -> str:
+    """Build the `vendors_per_address` CTE.
+
+    When ``scoped`` is true the inner scans are restricted to a single
+    ``:address`` bound parameter, so a per-address lookup no longer pays a
+    full-table ``json_each`` expansion over every observation.
+    """
+    mfr_filter = "WHERE o.address_observed = :address" if scoped else ""
+    svc_filter = "AND o.address_observed = :address" if scoped else ""
+    return f"""
 vendors_per_address AS (
   SELECT address_observed, GROUP_CONCAT(vendor, ' | ') AS vendors
   FROM (
@@ -49,6 +58,7 @@ vendors_per_address AS (
          json_each(o.manufacturer_data_json) m
     LEFT JOIN company_identifiers c
       ON c.company_id_hex = m.key
+    {mfr_filter}
     UNION
     SELECT DISTINCT
       o.address_observed,
@@ -57,14 +67,17 @@ vendors_per_address AS (
          json_each(o.service_uuids_json) s
     JOIN service_uuids u
       ON u.uuid_hex = {SHORT_UUID_EXPR}
-    WHERE u.kind = 'member'
+    WHERE u.kind = 'member' {svc_filter}
   )
   GROUP BY address_observed
 )
 """.strip()
 
 
-SERVICES_PER_ADDRESS_CTE = f"""
+def services_per_address_cte(*, scoped: bool = False) -> str:
+    """Build the `services_per_address` CTE; see :func:`vendors_per_address_cte`."""
+    svc_filter = "AND o.address_observed = :address" if scoped else ""
+    return f"""
 services_per_address AS (
   SELECT address_observed, GROUP_CONCAT(service, ' | ') AS services
   FROM (
@@ -75,11 +88,17 @@ services_per_address AS (
          json_each(o.service_uuids_json) s
     JOIN service_uuids u
       ON u.uuid_hex = {SHORT_UUID_EXPR}
-    WHERE u.kind = 'sig'
+    WHERE u.kind = 'sig' {svc_filter}
   )
   GROUP BY address_observed
 )
 """.strip()
+
+
+# Unscoped fragments for the full-table list query, where every address is
+# grouped anyway.
+VENDORS_PER_ADDRESS_CTE = vendors_per_address_cte()
+SERVICES_PER_ADDRESS_CTE = services_per_address_cte()
 
 
 def split_concat(value: str | None) -> list[str]:

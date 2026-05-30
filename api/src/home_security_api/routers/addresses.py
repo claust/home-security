@@ -9,7 +9,9 @@ from fastapi import APIRouter, HTTPException, Path, Query, status
 from home_security_api.db import (
     SERVICES_PER_ADDRESS_CTE,
     VENDORS_PER_ADDRESS_CTE,
+    services_per_address_cte,
     split_concat,
+    vendors_per_address_cte,
 )
 from home_security_api.dependencies import ConnectionDep
 from home_security_api.models import (
@@ -168,8 +170,8 @@ def address_detail(
 ) -> AddressSummary:
     sql = f"""
     WITH
-    {VENDORS_PER_ADDRESS_CTE},
-    {SERVICES_PER_ADDRESS_CTE}
+    {vendors_per_address_cte(scoped=True)},
+    {services_per_address_cte(scoped=True)}
     SELECT
       o.address_observed AS address,
       MAX(o.name) AS name,
@@ -183,10 +185,10 @@ def address_detail(
     FROM ble_address_observations o
     LEFT JOIN vendors_per_address v ON v.address_observed = o.address_observed
     LEFT JOIN services_per_address sv ON sv.address_observed = o.address_observed
-    WHERE o.address_observed = ?
+    WHERE o.address_observed = :address
     GROUP BY o.address_observed
     """
-    row = connection.execute(sql, (address,)).fetchone()
+    row = connection.execute(sql, {"address": address}).fetchone()
     if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
