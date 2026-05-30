@@ -70,6 +70,10 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          # package.json with "packageManager" lives in web/, not the repo
+          # root where the action looks, so pin the version explicitly.
+          version: "11.5.0"
 
       - name: Install Node
         uses: actions/setup-node@v4
