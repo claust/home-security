@@ -21,13 +21,11 @@ from home_security_api.settings import Settings
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
-    connection = open_readonly(settings.archive_path)
-    app.state.db = connection
-    try:
-        yield
-    finally:
-        app.state.db = None
-        connection.close()
+    # Validate the archive is openable at startup (fail fast). Each request
+    # opens its own short-lived read-only connection via
+    # dependencies.get_connection, so nothing concurrency-sensitive is shared.
+    open_readonly(settings.archive_path).close()
+    yield
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
