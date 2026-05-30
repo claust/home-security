@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "bleak>=0.22.3",
+    "scapy>=2.6.1",
 ]
 
 [dependency-groups]
@@ -17,6 +18,7 @@ dev = [
 [project.scripts]
 home-security-pi-ble-observe = "home_security_pi.ble_observe:main"
 home-security-pi-ble-scan = "home_security_pi.ble_scan:main"
+home-security-pi-wifi-observe = "home_security_pi.wifi_observe:main"
 home-security-pi-prune = "home_security_pi.prune:main"
 home-security-pi-snapshot = "home_security_pi.snapshot:main"
 home-security-pi-verify = "home_security_pi.verify:main"

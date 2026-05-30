@@ -196,6 +196,83 @@ class PruneObservationsTests(unittest.TestCase):
 
         self.assertEqual(result.rows_deleted, 0)
 
+    def test_prunes_wifi_table_when_present(self) -> None:
+        now = datetime(2026, 5, 9, 12, 0, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "observations.sqlite3"
+            build_observations_db(
+                database,
+                [
+                    (now - timedelta(days=30)).isoformat(),
+                    (now - timedelta(days=1)).isoformat(),
+                ],
+            )
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE wifi_address_observations (
+                      id INTEGER PRIMARY KEY,
+                      observed_at_utc TEXT NOT NULL,
+                      source TEXT NOT NULL,
+                      scanner TEXT NOT NULL,
+                      address_observed TEXT NOT NULL,
+                      frame_type TEXT NOT NULL,
+                      ssid TEXT,
+                      rssi INTEGER,
+                      channel INTEGER,
+                      is_randomized_mac INTEGER NOT NULL,
+                      information_elements_json TEXT NOT NULL,
+                      hostname TEXT NOT NULL
+                    )
+                    """
+                )
+                connection.executemany(
+                    """
+                    INSERT INTO wifi_address_observations (
+                      observed_at_utc, source, scanner, address_observed,
+                      frame_type, ssid, rssi, channel, is_randomized_mac,
+                      information_elements_json, hostname
+                    ) VALUES (?, 'wifi', 'scapy', 'a6:00:00:00:00:01',
+                              'probe_req', NULL, -50, 6, 1, '{}', 'pi-test')
+                    """,
+                    [
+                        ((now - timedelta(days=30)).isoformat(),),
+                        ((now - timedelta(days=20)).isoformat(),),
+                        ((now - timedelta(days=1)).isoformat(),),
+                    ],
+                )
+
+            result = prune_observations(
+                database=database,
+                requested_before=now,
+                keep_last_days=14,
+                now=now,
+            )
+
+            with sqlite3.connect(database) as connection:
+                wifi_remaining = connection.execute(
+                    "SELECT COUNT(*) FROM wifi_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(result.rows_deleted, 1)
+        self.assertEqual(result.wifi_rows_deleted, 2)
+        self.assertEqual(wifi_remaining, 1)
+
+    def test_wifi_rows_deleted_is_zero_when_table_absent(self) -> None:
+        now = datetime(2026, 5, 9, 12, 0, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "observations.sqlite3"
+            build_observations_db(database, [(now - timedelta(days=30)).isoformat()])
+
+            result = prune_observations(
+                database=database,
+                requested_before=now,
+                keep_last_days=14,
+                now=now,
+            )
+
+        self.assertEqual(result.wifi_rows_deleted, 0)
+
     def test_missing_database_raises(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             database = Path(directory) / "missing.sqlite3"

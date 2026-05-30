@@ -35,8 +35,13 @@ ssh "$HOST" "set -eu
   systemctl --no-pager --full status home-security-bluetooth-power.service || true
   printf '\nBLE observer service status:\n'
   systemctl --no-pager --full status home-security-ble-observer.service || true
-  printf '\nBLE observer database tables:\n'
-  python - <<'PY'
+  WIFI_MARKER=\"\$HOME/.local/state/home-security/wifi-monitor-interface\"
+  if [ -f \"\$WIFI_MARKER\" ]; then
+    printf '\nWi-Fi monitor service status (interface %s):\n' \"\$(cat \"\$WIFI_MARKER\")\"
+    systemctl --no-pager --full status home-security-wifi-monitor.service || true
+  fi
+  printf '\nObservation database tables:\n'
+  python3 - <<'PY'
 import sqlite3
 from pathlib import Path
 database = Path.home() / '.local/state/home-security/observations.sqlite3'
@@ -52,10 +57,17 @@ with sqlite3.connect(database) as connection:
         ORDER BY name
         \"\"\"
     ).fetchall()
-    print([row[0] for row in rows])
+    tables = [row[0] for row in rows]
+    print(tables)
     count = connection.execute(
         'SELECT COUNT(*) FROM ble_address_observations'
     ).fetchone()[0]
     print(f'ble_address_observations_count={count}')
+    if 'wifi_address_observations' in tables:
+        wifi = connection.execute(
+            'SELECT COUNT(*), COUNT(DISTINCT address_observed) '
+            'FROM wifi_address_observations'
+        ).fetchone()
+        print(f'wifi_address_observations_count={wifi[0]} unique_macs={wifi[1]}')
 PY
 "

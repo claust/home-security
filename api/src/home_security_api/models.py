@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -77,6 +77,39 @@ class Observation(_Model):
     local_name: str | None
     service_uuids: list[str]
     manufacturer_data: dict[str, str]
+
+
+class WifiObservation(_Model):
+    observed_at_utc: datetime
+    scanner_id: str
+    address: str = Field(description="Transmitter MAC as observed.")
+    frame_type: str
+    ssid: str | None
+    rssi: int | None
+    channel: int | None
+    is_randomized_mac: bool
+    information_elements: dict[str, Any]
+
+
+class WifiAddressSummary(_Model):
+    address: str = Field(description="Transmitter MAC as observed.")
+    is_randomized_mac: bool
+    ssids: list[str]
+    frame_types: list[str]
+    channels: list[int]
+    scanners: list[str]
+    observations: int
+    first_observed_utc: datetime
+    last_observed_utc: datetime
+
+
+class WifiOverview(_Model):
+    total_observations: int
+    distinct_addresses: int
+    randomized_addresses: int
+    scanner_count: int
+    first_observed_utc: datetime | None
+    last_observed_utc: datetime | None
 
 
 class HourlyBucket(_Model):

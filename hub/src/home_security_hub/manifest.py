@@ -41,6 +41,13 @@ class Manifest:
     sha256: str
     integrity: str
     package_version: str
+    # Optional Wi-Fi stats. Absent from BLE-only Pis' manifests (older Pi
+    # packages, or Pis without a monitor adapter), so they default to zero/None
+    # and are never required for validation.
+    wifi_row_count: int = 0
+    wifi_unique_addresses: int = 0
+    wifi_observed_at_utc_min: str | None = None
+    wifi_observed_at_utc_max: str | None = None
 
     @classmethod
     def from_path(cls, path: Path) -> Manifest:
@@ -90,6 +97,14 @@ class Manifest:
             sha256=sha256,
             integrity=str(payload["integrity"]),
             package_version=str(payload["package_version"]),
+            wifi_row_count=_optional_count(payload.get("wifi_row_count")),
+            wifi_unique_addresses=_optional_count(payload.get("wifi_unique_addresses")),
+            wifi_observed_at_utc_min=_optional_str(
+                payload.get("wifi_observed_at_utc_min")
+            ),
+            wifi_observed_at_utc_max=_optional_str(
+                payload.get("wifi_observed_at_utc_max")
+            ),
         )
 
 
@@ -97,3 +112,9 @@ def _optional_str(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _optional_count(value: Any) -> int:
+    if not isinstance(value, int) or value < 0:
+        return 0
+    return value

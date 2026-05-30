@@ -54,6 +54,55 @@ def build_pi_snapshot(path: Path, rows: list[dict]) -> None:
             )
 
 
+def add_wifi_snapshot_table(path: Path, rows: list[dict]) -> None:
+    """Add a Pi-side wifi_address_observations table + rows to a snapshot DB.
+
+    Mirrors the table the Wi-Fi observer creates on Pis with a monitor adapter.
+    """
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            """
+            CREATE TABLE wifi_address_observations (
+              id INTEGER PRIMARY KEY,
+              observed_at_utc TEXT NOT NULL,
+              source TEXT NOT NULL,
+              scanner TEXT NOT NULL,
+              address_observed TEXT NOT NULL,
+              frame_type TEXT NOT NULL,
+              ssid TEXT,
+              rssi INTEGER,
+              channel INTEGER,
+              is_randomized_mac INTEGER NOT NULL,
+              information_elements_json TEXT NOT NULL,
+              hostname TEXT NOT NULL
+            )
+            """
+        )
+        for row in rows:
+            connection.execute(
+                """
+                INSERT INTO wifi_address_observations (
+                  observed_at_utc, source, scanner, address_observed,
+                  frame_type, ssid, rssi, channel, is_randomized_mac,
+                  information_elements_json, hostname
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["observed_at_utc"],
+                    row.get("source", "wifi"),
+                    row.get("scanner", "scapy"),
+                    row["address_observed"],
+                    row.get("frame_type", "probe_req"),
+                    row.get("ssid"),
+                    row.get("rssi"),
+                    row.get("channel"),
+                    row.get("is_randomized_mac", 1),
+                    row.get("information_elements_json", "{}"),
+                    row.get("hostname", "pi-test"),
+                ),
+            )
+
+
 def manifest_for(scanner_id: str, **overrides: object) -> Manifest:
     fields = {
         "scanner_id": scanner_id,
@@ -89,7 +138,14 @@ class ArchiveTests(unittest.TestCase):
                         """
                     )
                 )
-        self.assertEqual(tables, ["ble_address_observations", "snapshot_ingests"])
+        self.assertEqual(
+            tables,
+            [
+                "ble_address_observations",
+                "snapshot_ingests",
+                "wifi_address_observations",
+            ],
+        )
 
     def test_ingest_inserts_rows_with_scanner_id(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -274,6 +330,198 @@ class ArchiveTests(unittest.TestCase):
                 ).fetchone()[0]
 
         self.assertEqual(stored, '{"004c":"1006001fa00000"}')
+
+    def test_initialize_migrates_legacy_snapshot_ingests(self) -> None:
+        # An archive created before the Wi-Fi scanner has no wifi_rows_* columns
+        # and no wifi table; initialize() must add them idempotently so ingest
+        # works against the existing archive.
+        with tempfile.TemporaryDirectory() as directory:
+            archive_path = Path(directory) / "archive.sqlite3"
+            with sqlite3.connect(archive_path) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE snapshot_ingests (
+                      id INTEGER PRIMARY KEY,
+                      scanner_id TEXT NOT NULL,
+                      hostname TEXT NOT NULL,
+                      snapshot_taken_at_utc TEXT NOT NULL,
+                      snapshot_sha256 TEXT NOT NULL,
+                      manifest_path TEXT NOT NULL,
+                      rows_in_snapshot INTEGER NOT NULL,
+                      rows_inserted INTEGER NOT NULL,
+                      rows_skipped INTEGER NOT NULL,
+                      observed_at_utc_min TEXT,
+                      observed_at_utc_max TEXT,
+                      ingested_at_utc TEXT NOT NULL,
+                      pi_package_version TEXT NOT NULL
+                    )
+                    """
+                )
+
+            Archive(archive_path).initialize()
+
+            with sqlite3.connect(archive_path) as connection:
+                cols = {
+                    row[1]
+                    for row in connection.execute("PRAGMA table_info(snapshot_ingests)")
+                }
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+
+        self.assertIn("wifi_rows_in_snapshot", cols)
+        self.assertIn("wifi_rows_inserted", cols)
+        self.assertIn("wifi_rows_skipped", cols)
+        self.assertIn("wifi_address_observations", tables)
+
+        # Initialize again to confirm the migration is idempotent.
+        Archive(archive_path).initialize()
+
+    def test_ingest_skips_wifi_when_table_absent(self) -> None:
+        # A Pi without a monitor adapter produces snapshots with no wifi table;
+        # ingest must not break.
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            archive_path = tmp / "archive.sqlite3"
+            snapshot_path = tmp / "snap.sqlite3"
+
+            build_pi_snapshot(
+                snapshot_path,
+                [
+                    {
+                        "observed_at_utc": "2026-05-09T10:00:00+00:00",
+                        "address_observed": "AA",
+                    }
+                ],
+            )
+
+            archive = Archive(archive_path)
+            archive.initialize()
+            result = archive.ingest_snapshot(
+                snapshot_path=snapshot_path,
+                manifest=manifest_for("ble-only", row_count=1, unique_addresses=1),
+                manifest_path=tmp / "snap.json",
+                ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
+            )
+
+            with sqlite3.connect(archive_path) as connection:
+                wifi_rows = connection.execute(
+                    "SELECT COUNT(*) FROM wifi_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(result.rows_inserted, 1)
+        self.assertEqual(result.wifi_rows_in_snapshot, 0)
+        self.assertEqual(result.wifi_rows_inserted, 0)
+        self.assertEqual(wifi_rows, 0)
+
+    def test_ingest_inserts_wifi_rows_with_scanner_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            archive_path = tmp / "archive.sqlite3"
+            snapshot_path = tmp / "snap.sqlite3"
+
+            build_pi_snapshot(snapshot_path, [])
+            add_wifi_snapshot_table(
+                snapshot_path,
+                [
+                    {
+                        "observed_at_utc": "2026-05-09T10:00:00+00:00",
+                        "address_observed": "a6:00:00:00:00:01",
+                        "frame_type": "probe_req",
+                        "ssid": "HomeNet",
+                        "channel": 6,
+                        "is_randomized_mac": 1,
+                        "information_elements_json": '{"tag_order":[0,1]}',
+                    },
+                    {
+                        "observed_at_utc": "2026-05-09T10:01:00+00:00",
+                        "address_observed": "a4:83:e7:00:11:22",
+                        "frame_type": "beacon",
+                        "channel": 11,
+                        "is_randomized_mac": 0,
+                        "information_elements_json": '{"tag_order":[0,1,45]}',
+                    },
+                ],
+            )
+
+            archive = Archive(archive_path)
+            archive.initialize()
+            result = archive.ingest_snapshot(
+                snapshot_path=snapshot_path,
+                manifest=manifest_for("pi-livingroom"),
+                manifest_path=tmp / "snap.json",
+                ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
+            )
+
+            with sqlite3.connect(archive_path) as connection:
+                rows = connection.execute(
+                    """
+                    SELECT scanner_id, address_observed, frame_type,
+                           is_randomized_mac, ingested_at_utc
+                    FROM wifi_address_observations
+                    ORDER BY address_observed
+                    """
+                ).fetchall()
+                ingest = connection.execute(
+                    """
+                    SELECT wifi_rows_in_snapshot, wifi_rows_inserted,
+                           wifi_rows_skipped
+                    FROM snapshot_ingests
+                    """
+                ).fetchone()
+
+        self.assertEqual(result.wifi_rows_in_snapshot, 2)
+        self.assertEqual(result.wifi_rows_inserted, 2)
+        self.assertEqual(result.wifi_rows_skipped, 0)
+        self.assertEqual(rows[0][0], "pi-livingroom")
+        self.assertEqual(rows[0][4], "2026-05-09T12:30:00+00:00")
+        self.assertEqual(ingest, (2, 2, 0))
+
+    def test_repeated_wifi_ingest_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            archive_path = tmp / "archive.sqlite3"
+            snapshot_path = tmp / "snap.sqlite3"
+
+            build_pi_snapshot(snapshot_path, [])
+            add_wifi_snapshot_table(
+                snapshot_path,
+                [
+                    {
+                        "observed_at_utc": "2026-05-09T10:00:00+00:00",
+                        "address_observed": "a6:00:00:00:00:01",
+                    }
+                ],
+            )
+
+            archive = Archive(archive_path)
+            archive.initialize()
+            manifest = manifest_for("pi-livingroom")
+            first = archive.ingest_snapshot(
+                snapshot_path=snapshot_path,
+                manifest=manifest,
+                manifest_path=tmp / "snap.json",
+                ingested_at_utc=datetime(2026, 5, 9, 12, 30, tzinfo=UTC),
+            )
+            second = archive.ingest_snapshot(
+                snapshot_path=snapshot_path,
+                manifest=manifest,
+                manifest_path=tmp / "snap.json",
+                ingested_at_utc=datetime(2026, 5, 9, 12, 31, tzinfo=UTC),
+            )
+
+            with sqlite3.connect(archive_path) as connection:
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM wifi_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(first.wifi_rows_inserted, 1)
+        self.assertEqual(second.wifi_rows_inserted, 0)
+        self.assertEqual(second.wifi_rows_skipped, 1)
+        self.assertEqual(count, 1)
 
     def test_scanner_summary_returns_counts_and_bounds(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

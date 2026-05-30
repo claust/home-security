@@ -412,6 +412,64 @@
         "title": "Page[Observation]",
         "type": "object"
       },
+      "Page_WifiAddressSummary_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WifiAddressSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque cursor; pass to ?cursor= for the next page.",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[WifiAddressSummary]",
+        "type": "object"
+      },
+      "Page_WifiObservation_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WifiObservation"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque cursor; pass to ?cursor= for the next page.",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[WifiObservation]",
+        "type": "object"
+      },
       "ScannerDetail": {
         "additionalProperties": false,
         "properties": {
@@ -656,6 +714,208 @@
           "distinct_addresses"
         ],
         "title": "VendorBucket",
+        "type": "object"
+      },
+      "WifiAddressSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Transmitter MAC as observed.",
+            "title": "Address",
+            "type": "string"
+          },
+          "channels": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "first_observed_utc": {
+            "format": "date-time",
+            "title": "First Observed Utc",
+            "type": "string"
+          },
+          "frame_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Frame Types",
+            "type": "array"
+          },
+          "is_randomized_mac": {
+            "title": "Is Randomized Mac",
+            "type": "boolean"
+          },
+          "last_observed_utc": {
+            "format": "date-time",
+            "title": "Last Observed Utc",
+            "type": "string"
+          },
+          "observations": {
+            "title": "Observations",
+            "type": "integer"
+          },
+          "scanners": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scanners",
+            "type": "array"
+          },
+          "ssids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ssids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "address",
+          "is_randomized_mac",
+          "ssids",
+          "frame_types",
+          "channels",
+          "scanners",
+          "observations",
+          "first_observed_utc",
+          "last_observed_utc"
+        ],
+        "title": "WifiAddressSummary",
+        "type": "object"
+      },
+      "WifiObservation": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "description": "Transmitter MAC as observed.",
+            "title": "Address",
+            "type": "string"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "frame_type": {
+            "title": "Frame Type",
+            "type": "string"
+          },
+          "information_elements": {
+            "additionalProperties": true,
+            "title": "Information Elements",
+            "type": "object"
+          },
+          "is_randomized_mac": {
+            "title": "Is Randomized Mac",
+            "type": "boolean"
+          },
+          "observed_at_utc": {
+            "format": "date-time",
+            "title": "Observed At Utc",
+            "type": "string"
+          },
+          "rssi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rssi"
+          },
+          "scanner_id": {
+            "title": "Scanner Id",
+            "type": "string"
+          },
+          "ssid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssid"
+          }
+        },
+        "required": [
+          "observed_at_utc",
+          "scanner_id",
+          "address",
+          "frame_type",
+          "ssid",
+          "rssi",
+          "channel",
+          "is_randomized_mac",
+          "information_elements"
+        ],
+        "title": "WifiObservation",
+        "type": "object"
+      },
+      "WifiOverview": {
+        "additionalProperties": false,
+        "properties": {
+          "distinct_addresses": {
+            "title": "Distinct Addresses",
+            "type": "integer"
+          },
+          "first_observed_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Observed Utc"
+          },
+          "last_observed_utc": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Observed Utc"
+          },
+          "randomized_addresses": {
+            "title": "Randomized Addresses",
+            "type": "integer"
+          },
+          "scanner_count": {
+            "title": "Scanner Count",
+            "type": "integer"
+          },
+          "total_observations": {
+            "title": "Total Observations",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_observations",
+          "distinct_addresses",
+          "randomized_addresses",
+          "scanner_count",
+          "first_observed_utc",
+          "last_observed_utc"
+        ],
+        "title": "WifiOverview",
         "type": "object"
       }
     }
@@ -1424,6 +1684,499 @@
         "summary": "Manufacturer-data company-ID breakdown",
         "tags": [
           "stats"
+        ]
+      }
+    },
+    "/wifi/addresses": {
+      "get": {
+        "operationId": "list_addresses_wifi_addresses_get",
+        "parameters": [
+          {
+            "description": "Substring match on MAC.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring match on MAC.",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scanner_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scanner Id"
+            }
+          },
+          {
+            "description": "Filter to randomized (true) or stable (false) MACs.",
+            "in": "query",
+            "name": "randomized",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to randomized (true) or stable (false) MACs.",
+              "title": "Randomized"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seen_since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seen Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "last_seen",
+              "enum": [
+                "last_seen",
+                "first_seen",
+                "observations"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WifiAddressSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Paginated, filterable list of Wi-Fi transmitter MACs",
+        "tags": [
+          "wifi"
+        ]
+      }
+    },
+    "/wifi/addresses/{address}": {
+      "get": {
+        "operationId": "address_detail_wifi_addresses__address__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "examples": [
+                "a4:83:e7:00:11:22"
+              ],
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Address",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WifiAddressSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Address not present in archive"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Single Wi-Fi MAC summary",
+        "tags": [
+          "wifi"
+        ]
+      }
+    },
+    "/wifi/addresses/{address}/observations": {
+      "get": {
+        "operationId": "address_observations_wifi_addresses__address__observations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Address",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WifiObservation_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Frame timeline for one Wi-Fi MAC",
+        "tags": [
+          "wifi"
+        ]
+      }
+    },
+    "/wifi/observations": {
+      "get": {
+        "operationId": "list_observations_wifi_observations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scanner_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scanner Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "address",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Address"
+            }
+          },
+          {
+            "in": "query",
+            "name": "frame_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Frame Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ssid",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ssid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WifiObservation_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recent Wi-Fi frames across all scanners",
+        "tags": [
+          "wifi"
+        ]
+      }
+    },
+    "/wifi/stats/overview": {
+      "get": {
+        "operationId": "overview_wifi_stats_overview_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WifiOverview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Global Wi-Fi counts and time range",
+        "tags": [
+          "wifi"
         ]
       }
     }
