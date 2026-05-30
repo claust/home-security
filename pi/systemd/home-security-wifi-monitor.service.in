@@ -1,0 +1,23 @@
+[Unit]
+Description=Home Security Wi-Fi monitor-mode scanner
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=@HOME_SECURITY_PI_USER@
+WorkingDirectory=@HOME_SECURITY_PI_CODE_DIR@
+Environment=PATH=@HOME_SECURITY_PI_HOME@/.local/bin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+# Privileged one-time interface setup (root via '+'): NetworkManager hand-off,
+# regulatory domain, and monitor-mode switch on the dedicated adapter.
+ExecStartPre=+@HOME_SECURITY_PI_CODE_DIR@/sbin/home-security-wifi-monitor-setup @HOME_SECURITY_PI_WIFI_INTERFACE@
+# Main process runs unprivileged with only the capabilities it needs:
+# CAP_NET_RAW to open the monitor socket, CAP_NET_ADMIN to retune channels.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+ExecStart=/usr/bin/env uv run --no-dev home-security-pi-wifi-observe --interface @HOME_SECURITY_PI_WIFI_INTERFACE@ --database @HOME_SECURITY_PI_STATE_DIR@/observations.sqlite3 --min-interval-seconds 60
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

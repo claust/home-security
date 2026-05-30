@@ -25,6 +25,16 @@ if ! printf '%s' "$HOME_SECURITY_SCANNER_ID" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9.
   exit 1
 fi
 
+# Optional per-Pi Wi-Fi monitor opt-in. Only some Pis have a monitor-capable
+# external adapter; set HOME_SECURITY_PI_WIFI_INTERFACE=wlan1 to enable the
+# passive Wi-Fi scanner on this Pi. Persisted once to a marker file the deploy
+# reads on every run.
+WIFI_INTERFACE="${HOME_SECURITY_PI_WIFI_INTERFACE:-}"
+if [ -n "$WIFI_INTERFACE" ] && ! printf '%s' "$WIFI_INTERFACE" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*$'; then
+  echo "HOME_SECURITY_PI_WIFI_INTERFACE must be an interface name like wlan1." >&2
+  exit 1
+fi
+
 if ! command -v rsync >/dev/null 2>&1; then
   echo "rsync is required locally." >&2
   exit 1
@@ -41,6 +51,8 @@ ssh -t "$HOST" "set -eu
   SUDOERS_TMP=\"\$(mktemp)\"
   SCANNER_ID_FILE=\"\$HOME/.local/state/home-security/scanner-id\"
   SCANNER_ID_NEW=\"$HOME_SECURITY_SCANNER_ID\"
+  WIFI_INTERFACE_NEW=\"$WIFI_INTERFACE\"
+  WIFI_MARKER=\"\$HOME/.local/state/home-security/wifi-monitor-interface\"
 
   mkdir -p \"\$(dirname \"\$SCANNER_ID_FILE\")\"
   if [ -f \"\$SCANNER_ID_FILE\" ]; then
@@ -54,6 +66,12 @@ ssh -t "$HOST" "set -eu
     chmod 0644 \"\$SCANNER_ID_FILE\"
   fi
 
+  if [ -n \"\$WIFI_INTERFACE_NEW\" ]; then
+    printf '%s\n' \"\$WIFI_INTERFACE_NEW\" > \"\$WIFI_MARKER\"
+    chmod 0644 \"\$WIFI_MARKER\"
+    printf 'Wi-Fi monitor enabled on interface %s.\n' \"\$WIFI_INTERFACE_NEW\"
+  fi
+
   cat > \"\$SUDOERS_TMP\" <<EOF
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/install -m 0755 \$CODE_DIR/sbin/home-security-apply-systemd /usr/local/sbin/home-security-apply-systemd
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/local/sbin/home-security-apply-systemd
@@ -61,6 +79,10 @@ ssh -t "$HOST" "set -eu
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-ble-observer.service
 \$DEPLOY_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
 EOF
+
+  if [ -n \"\$WIFI_INTERFACE_NEW\" ]; then
+    printf '%s ALL=(root) NOPASSWD: /usr/bin/systemctl restart home-security-wifi-monitor.service\n' \"\$DEPLOY_USER\" >> \"\$SUDOERS_TMP\"
+  fi
 
   sudo visudo -cf \"\$SUDOERS_TMP\"
   sudo install -m 0440 \"\$SUDOERS_TMP\" /etc/sudoers.d/home-security-deploy
@@ -71,6 +93,9 @@ EOF
   sudo -n /usr/local/sbin/home-security-apply-systemd
   sudo -n /usr/bin/systemctl restart home-security-bluetooth-power.service
   sudo -n /usr/bin/systemctl restart home-security-ble-observer.service
+  if [ -n \"\$WIFI_INTERFACE_NEW\" ]; then
+    sudo -n /usr/bin/systemctl restart home-security-wifi-monitor.service
+  fi
 
   printf 'Bootstrap complete. Future ./tools/deploy-pi runs should be non-interactive.\n'
 "

@@ -47,6 +47,9 @@ class BLEObservationStore:
     def initialize(self) -> None:
         self.database.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
+            # WAL so the BLE and Wi-Fi observers can write the one DB file
+            # concurrently without blocking on a single-writer lock.
+            connection.execute("PRAGMA journal_mode = WAL")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS ble_address_observations (

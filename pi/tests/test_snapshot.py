@@ -15,6 +15,7 @@ from home_security_pi.snapshot import (
     sha256_file,
     validate_scanner_id,
 )
+from home_security_pi.wifi_store import WifiObservation, WifiObservationStore
 
 
 def insert_observation(
@@ -108,6 +109,80 @@ class SnapshotTests(unittest.TestCase):
                     "SELECT COUNT(*) FROM ble_address_observations"
                 ).fetchone()[0]
             self.assertEqual(rows, 2)
+
+    def test_wifi_table_absent_reports_zero_wifi_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            database = tmp / "obs.sqlite3"
+            BLEObservationStore(database).initialize()
+            insert_observation(
+                database,
+                observed_at_utc="2026-01-01T00:00:00+00:00",
+                address_observed="AA",
+            )
+
+            taken_at = datetime(2026, 1, 3, 12, 30, 45, tzinfo=UTC)
+            _, _, manifest = create_snapshot(
+                database=database,
+                output_dir=tmp / "snap",
+                scanner_id="ble-only",
+                snapshot_taken_at=taken_at,
+                hostname="h",
+            )
+
+        self.assertEqual(manifest.row_count, 1)
+        self.assertEqual(manifest.wifi_row_count, 0)
+        self.assertEqual(manifest.wifi_unique_addresses, 0)
+        self.assertIsNone(manifest.wifi_observed_at_utc_min)
+        self.assertIsNone(manifest.wifi_observed_at_utc_max)
+
+    def test_wifi_table_present_is_summarized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            tmp = Path(directory)
+            database = tmp / "obs.sqlite3"
+            BLEObservationStore(database).initialize()
+            wifi_store = WifiObservationStore(database)
+            wifi_store.initialize()
+            for moment, address in (
+                ("2026-01-01T00:00:00+00:00", "a6:00:00:00:00:01"),
+                ("2026-01-02T00:00:00+00:00", "a6:00:00:00:00:02"),
+                ("2026-01-02T00:00:30+00:00", "a6:00:00:00:00:02"),
+            ):
+                wifi_store.insert(
+                    WifiObservation(
+                        observed_at_utc=datetime.fromisoformat(moment),
+                        source="wifi",
+                        scanner="scapy",
+                        address_observed=address,
+                        frame_type="probe_req",
+                        ssid=None,
+                        rssi=-50,
+                        channel=6,
+                        is_randomized_mac=True,
+                        information_elements={"tag_order": [0, 1]},
+                        hostname="h",
+                    )
+                )
+
+            taken_at = datetime(2026, 1, 3, 12, 30, 45, tzinfo=UTC)
+            snapshot_path, _, manifest = create_snapshot(
+                database=database,
+                output_dir=tmp / "snap",
+                scanner_id="with-wifi",
+                snapshot_taken_at=taken_at,
+                hostname="h",
+            )
+
+            with sqlite3.connect(snapshot_path) as connection:
+                snap_count = connection.execute(
+                    "SELECT COUNT(*) FROM wifi_address_observations"
+                ).fetchone()[0]
+
+        self.assertEqual(snap_count, 3)
+        self.assertEqual(manifest.wifi_row_count, 3)
+        self.assertEqual(manifest.wifi_unique_addresses, 2)
+        self.assertEqual(manifest.wifi_observed_at_utc_min, "2026-01-01T00:00:00+00:00")
+        self.assertEqual(manifest.wifi_observed_at_utc_max, "2026-01-02T00:00:30+00:00")
 
     def test_snapshot_with_empty_table_has_null_observed_at(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -150,6 +150,7 @@ uv run pre-commit run --config ../.pre-commit-config.yaml --all-files
 - `bluetooth.service`: OS BlueZ service.
 - `home-security-bluetooth-power.service`: clears Bluetooth rfkill soft blocks and asks BlueZ to power on the adapter.
 - `home-security-ble-observer.service`: continuously records BLE addresses observed with a one-minute minimum interval per address.
+- `home-security-wifi-monitor.service` (optional, per-Pi): passive, receive-only 802.11 monitor-mode scanner on a dedicated external adapter. Enabled only on Pis with a monitor-capable adapter via `HOME_SECURITY_PI_WIFI_INTERFACE` at bootstrap; records Wi-Fi sightings into the same `observations.sqlite3`. See [docs/wifi-monitor-scanner.md](docs/wifi-monitor-scanner.md) and the "Wi-Fi Monitor" section of [docs/raspberry-pi.md](docs/raspberry-pi.md).
 
 The bootstrap script installs narrow sudo permissions so normal deploys can run non-interactively with `sudo -n`.
 

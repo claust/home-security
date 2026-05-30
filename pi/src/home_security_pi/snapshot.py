@@ -51,6 +51,21 @@ class SnapshotManifest:
     sha256: str
     integrity: str
     package_version: str
+    # Wi-Fi observations are optional per Pi (only some have a monitor-capable
+    # adapter). When the wifi_address_observations table is absent these report
+    # zero / None so the manifest shape stays stable across all Pis.
+    wifi_row_count: int = 0
+    wifi_unique_addresses: int = 0
+    wifi_observed_at_utc_min: str | None = None
+    wifi_observed_at_utc_max: str | None = None
+
+
+@dataclass(frozen=True)
+class TableSummary:
+    row_count: int
+    unique_addresses: int
+    observed_at_utc_min: str | None
+    observed_at_utc_max: str | None
 
 
 def utc_now() -> datetime:
@@ -89,29 +104,44 @@ def take_snapshot(source: Path, destination: Path) -> None:
         src.backup(dst)
 
 
-def summarize_snapshot(
-    snapshot_path: Path,
-) -> tuple[int, int, str | None, str | None, str]:
-    with closing(sqlite3.connect(snapshot_path)) as connection:
-        connection.row_factory = sqlite3.Row
-        row = connection.execute(
-            """
-            SELECT
-              COUNT(*) AS row_count,
-              COUNT(DISTINCT address_observed) AS unique_addresses,
-              MIN(observed_at_utc) AS observed_at_utc_min,
-              MAX(observed_at_utc) AS observed_at_utc_max
-            FROM ble_address_observations
-            """
-        ).fetchone()
-        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
-    return (
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
+
+
+def _summarize_table(connection: sqlite3.Connection, table: str) -> TableSummary:
+    if not _table_exists(connection, table):
+        return TableSummary(0, 0, None, None)
+    row = connection.execute(
+        f"""
+        SELECT
+          COUNT(*) AS row_count,
+          COUNT(DISTINCT address_observed) AS unique_addresses,
+          MIN(observed_at_utc) AS observed_at_utc_min,
+          MAX(observed_at_utc) AS observed_at_utc_max
+        FROM {table}
+        """  # table name is a fixed internal constant, never user input
+    ).fetchone()
+    return TableSummary(
         int(row["row_count"]),
         int(row["unique_addresses"]),
         row["observed_at_utc_min"],
         row["observed_at_utc_max"],
-        str(integrity),
     )
+
+
+def summarize_snapshot(
+    snapshot_path: Path,
+) -> tuple[TableSummary, TableSummary, str]:
+    with closing(sqlite3.connect(snapshot_path)) as connection:
+        connection.row_factory = sqlite3.Row
+        ble = _summarize_table(connection, "ble_address_observations")
+        wifi = _summarize_table(connection, "wifi_address_observations")
+        integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
+    return ble, wifi, str(integrity)
 
 
 def create_snapshot(
@@ -132,9 +162,7 @@ def create_snapshot(
     manifest_path = output_dir / f"{stem}.json"
 
     take_snapshot(database, snapshot_path)
-    row_count, unique_addresses, observed_min, observed_max, integrity = (
-        summarize_snapshot(snapshot_path)
-    )
+    ble, wifi, integrity = summarize_snapshot(snapshot_path)
     digest = sha256_file(snapshot_path)
 
     manifest = SnapshotManifest(
@@ -142,13 +170,17 @@ def create_snapshot(
         hostname=hostname,
         snapshot_taken_at_utc=snapshot_taken_at.astimezone(UTC).isoformat(),
         database_source=str(database),
-        row_count=row_count,
-        unique_addresses=unique_addresses,
-        observed_at_utc_min=observed_min,
-        observed_at_utc_max=observed_max,
+        row_count=ble.row_count,
+        unique_addresses=ble.unique_addresses,
+        observed_at_utc_min=ble.observed_at_utc_min,
+        observed_at_utc_max=ble.observed_at_utc_max,
         sha256=digest,
         integrity=integrity,
         package_version=__version__,
+        wifi_row_count=wifi.row_count,
+        wifi_unique_addresses=wifi.unique_addresses,
+        wifi_observed_at_utc_min=wifi.observed_at_utc_min,
+        wifi_observed_at_utc_max=wifi.observed_at_utc_max,
     )
     manifest_path.write_text(
         json.dumps(asdict(manifest), indent=2, sort_keys=True) + "\n",

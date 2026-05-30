@@ -37,6 +37,27 @@ CREATE INDEX idx_ble_obs_address_time
 CREATE INDEX idx_ble_obs_scanner_time
   ON ble_address_observations(scanner_id, observed_at_utc);
 
+CREATE TABLE wifi_address_observations (
+  scanner_id TEXT NOT NULL,
+  observed_at_utc TEXT NOT NULL,
+  source TEXT NOT NULL,
+  scanner TEXT NOT NULL,
+  address_observed TEXT NOT NULL,
+  frame_type TEXT NOT NULL,
+  ssid TEXT,
+  rssi INTEGER,
+  channel INTEGER,
+  is_randomized_mac INTEGER NOT NULL,
+  information_elements_json TEXT NOT NULL,
+  hostname TEXT NOT NULL,
+  ingested_at_utc TEXT NOT NULL,
+  PRIMARY KEY (scanner_id, observed_at_utc, address_observed)
+);
+CREATE INDEX idx_wifi_obs_address_time
+  ON wifi_address_observations(address_observed, observed_at_utc);
+CREATE INDEX idx_wifi_obs_scanner_time
+  ON wifi_address_observations(scanner_id, observed_at_utc);
+
 CREATE TABLE snapshot_ingests (
   id INTEGER PRIMARY KEY,
   scanner_id TEXT NOT NULL,
@@ -47,6 +68,9 @@ CREATE TABLE snapshot_ingests (
   rows_in_snapshot INTEGER NOT NULL,
   rows_inserted INTEGER NOT NULL,
   rows_skipped INTEGER NOT NULL,
+  wifi_rows_in_snapshot INTEGER NOT NULL DEFAULT 0,
+  wifi_rows_inserted INTEGER NOT NULL DEFAULT 0,
+  wifi_rows_skipped INTEGER NOT NULL DEFAULT 0,
   observed_at_utc_min TEXT,
   observed_at_utc_max TEXT,
   ingested_at_utc TEXT NOT NULL,
@@ -145,9 +169,10 @@ def _build_archive(path: Path, *, rows: int) -> None:
             INSERT INTO snapshot_ingests (
               scanner_id, hostname, snapshot_taken_at_utc, snapshot_sha256,
               manifest_path, rows_in_snapshot, rows_inserted, rows_skipped,
+              wifi_rows_in_snapshot, wifi_rows_inserted, wifi_rows_skipped,
               observed_at_utc_min, observed_at_utc_max, ingested_at_utc,
               pi_package_version
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -159,6 +184,9 @@ def _build_archive(path: Path, *, rows: int) -> None:
                     1000,
                     1000,
                     0,
+                    500,
+                    500,
+                    0,
                     "2026-05-10T00:00:00+00:00",
                     "2026-05-13T23:59:00+00:00",
                     "2026-05-30T00:00:00+00:00",
@@ -167,9 +195,69 @@ def _build_archive(path: Path, *, rows: int) -> None:
                 for scanner in _SCANNERS
             ],
         )
+
+        _build_wifi(connection, rows=6_000)
         connection.commit()
     finally:
         connection.close()
+
+
+_WIFI_FRAME_TYPES = ("probe_req", "beacon", "probe_resp", "data")
+_WIFI_SSIDS = (None, "Gustav", "GuestNet", "eduroam")
+
+
+def _build_wifi(connection: sqlite3.Connection, *, rows: int) -> None:
+    """Populate synthetic Wi-Fi observations spanning randomized and stable
+    MACs, several frame types, and a 2.4 GHz channel spread."""
+    observations = []
+    for i in range(rows):
+        scanner = _SCANNERS[i % len(_SCANNERS)]
+        hour = i % 96
+        day = 10 + hour // 24
+        observed = f"2026-05-{day:02d}T{hour % 24:02d}:{i % 60:02d}:00+00:00"
+        # Half the MACs are locally-administered (randomized); encode that in
+        # the first octet's second-least-significant bit.
+        randomized = i % 2 == 0
+        first_octet = 0xA6 if randomized else 0xA4
+        address = (
+            f"{first_octet:02x}:83:e7:{(i % 300) >> 8:02x}:"
+            f"{(i % 300) & 0xFF:02x}:{i % 7:02x}"
+        )
+        frame_type = _WIFI_FRAME_TYPES[i % len(_WIFI_FRAME_TYPES)]
+        ssid = _WIFI_SSIDS[i % len(_WIFI_SSIDS)]
+        channel = (i % 13) + 1
+        ies = {
+            "tag_order": [0, 1, 50, 45, 127, 221],
+            "supported_rates": ["1", "2", "5.5", "11"],
+            "vendor_specific": ["0017f2"],
+        }
+        observations.append(
+            (
+                scanner,
+                observed,
+                "wifi",
+                "scapy",
+                address,
+                frame_type,
+                ssid,
+                -60,
+                channel,
+                1 if randomized else 0,
+                json.dumps(ies, separators=(",", ":"), sort_keys=True),
+                "host",
+                "2026-05-30T00:00:00+00:00",
+            )
+        )
+    connection.executemany(
+        """
+        INSERT OR IGNORE INTO wifi_address_observations (
+          scanner_id, observed_at_utc, source, scanner, address_observed,
+          frame_type, ssid, rssi, channel, is_randomized_mac,
+          information_elements_json, hostname, ingested_at_utc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        observations,
+    )
 
 
 @pytest.fixture(scope="session")

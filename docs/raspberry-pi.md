@@ -94,6 +94,63 @@ A successful deploy ends with the verification JSON (which now includes
 `scanner_id`), the bluetooth-power and BLE observer service status, and a row
 count from `~/.local/state/home-security/observations.sqlite3`.
 
+## Wi-Fi Monitor (Optional, Per-Pi)
+
+Some Pis have a monitor-capable external USB Wi-Fi adapter; those can run a
+passive 802.11 scanner alongside the BLE observer. This is **receive-only**
+monitoring of your own environment (see `AGENTS.md`): it never associates,
+injects, deauths, or transmits. See `docs/wifi-monitor-scanner.md` for the full
+design.
+
+The monitor is **opt-in per Pi**, gated by a marker file
+`~/.local/state/home-security/wifi-monitor-interface` whose contents name the
+monitor interface (e.g. `wlan1`). Enable it by passing the interface at
+bootstrap:
+
+```sh
+HOME_SECURITY_PI_HOST=home-security-pi-livingroom \
+  HOME_SECURITY_SCANNER_ID=pi-livingroom \
+  HOME_SECURITY_PI_WIFI_INTERFACE=wlan1 \
+  ./tools/bootstrap-pi-systemd
+```
+
+A Pi without the marker is completely unaffected: no `home-security-wifi-monitor`
+unit, no `wlan1` handling, no `wifi_address_observations` table — it deploys,
+snapshots, prunes, and ingests exactly as a BLE-only Pi. Enabling later is just
+writing the marker (re-bootstrap with the env var, or
+`echo wlan1 > ~/.local/state/home-security/wifi-monitor-interface`) and
+redeploying.
+
+### Hardware prerequisites
+
+- A **dedicated** external adapter whose driver supports monitor mode
+  (`iw phy <phy> info` lists `* monitor`). The living-room Pi's MediaTek
+  MT76x0 (`wlan1`, driver `mt76x0u`) qualifies; the built-in Broadcom radio
+  does not. The built-in radio (`wlan0`) keeps the Pi online over normal Wi-Fi
+  — the monitor adapter is given over entirely to sniffing and is left in
+  monitor mode even when the service stops.
+- `iw` installed on the Pi (`/usr/sbin/iw`).
+
+### What `apply-systemd` does when enabled
+
+- Renders and enables `home-security-wifi-monitor.service`, substituting the
+  interface name from the marker.
+- Installs a NetworkManager drop-in at
+  `/etc/NetworkManager/conf.d/99-home-security-wifi-monitor.conf` marking the
+  interface `unmanaged`, so NM never grabs it on boot.
+- The unit's privileged `ExecStartPre` (root) runs
+  `sbin/home-security-wifi-monitor-setup`, which hands the interface off from
+  NetworkManager, sets the regulatory domain (`iw reg set DK` by default;
+  override with `HOME_SECURITY_PI_WIFI_REG_DOMAIN`), and switches the adapter
+  into monitor mode. The main process then runs **unprivileged** with only
+  `CAP_NET_RAW` (open the monitor socket) and `CAP_NET_ADMIN` (hop channels).
+
+The scanner passively hops 2.4 GHz channels 1–13 and records one row per MAC
+per minute into the same `observations.sqlite3` (WAL mode lets the BLE and
+Wi-Fi observers write the one file concurrently). A successful deploy on an
+enabled Pi prints the Wi-Fi monitor service status and a
+`wifi_address_observations` row count alongside the BLE one.
+
 ## Powering Down A Pi
 
 Always shut down gracefully before pulling power — the SD card filesystem and

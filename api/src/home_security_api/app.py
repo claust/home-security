@@ -14,6 +14,7 @@ from home_security_api.routers import (
     scanners,
     search,
     stats,
+    wifi,
 )
 from home_security_api.settings import Settings
 
@@ -53,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(observations.router)
     app.include_router(stats.router)
     app.include_router(search.router)
+    app.include_router(wifi.router)
     return app
 
 

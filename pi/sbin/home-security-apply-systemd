@@ -36,6 +36,32 @@ else
 fi
 install -d "$SYSTEMD_DIR"
 
+# Per-Pi Wi-Fi monitor opt-in: a marker file naming the monitor interface
+# (e.g. "wlan1"), written once at bootstrap. Absent on Pis without a
+# monitor-capable adapter — those get full idempotent cleanup below.
+WIFI_MARKER="$STATE_DIR/wifi-monitor-interface"
+WIFI_UNIT="home-security-wifi-monitor.service"
+NM_DROPIN="/etc/NetworkManager/conf.d/99-home-security-wifi-monitor.conf"
+WIFI_INTERFACE=""
+if [ -f "$WIFI_MARKER" ]; then
+  WIFI_INTERFACE="$(tr -d '[:space:]' < "$WIFI_MARKER")"
+fi
+
+# Re-validate the marker contents before interpolating them into the systemd
+# unit template (via sed) and the NetworkManager drop-in. This script runs as
+# root and the marker is a user-writable file, so reject anything that is not a
+# plain interface name — defending against sed/template-substitution injection
+# and corrupted markers even though bootstrap already validated the value.
+if [ -n "$WIFI_INTERFACE" ]; then
+  case "$WIFI_INTERFACE" in
+    [!A-Za-z0-9]* | *[!A-Za-z0-9._-]*)
+      echo "Refusing to enable Wi-Fi monitor: invalid interface name in" \
+        "$WIFI_MARKER: '$WIFI_INTERFACE'. Expected a plain name like 'wlan1'." >&2
+      exit 2
+      ;;
+  esac
+fi
+
 render_unit() {
   src="$1"
   dest="$2"
@@ -46,6 +72,7 @@ render_unit() {
     -e "s|@HOME_SECURITY_PI_HOME@|$DEPLOY_HOME|g" \
     -e "s|@HOME_SECURITY_PI_CODE_DIR@|$CODE_DIR|g" \
     -e "s|@HOME_SECURITY_PI_STATE_DIR@|$STATE_DIR|g" \
+    -e "s|@HOME_SECURITY_PI_WIFI_INTERFACE@|$WIFI_INTERFACE|g" \
     "$CODE_DIR/systemd/$src" > "$tmp"
 
   install -m 0644 "$tmp" "$SYSTEMD_DIR/$dest"
@@ -60,12 +87,44 @@ render_unit \
   home-security-ble-observer.service.in \
   home-security-ble-observer.service
 
+if [ -n "$WIFI_INTERFACE" ]; then
+  # The setup helper runs privileged from the unit; ensure it is executable.
+  chmod 0755 "$CODE_DIR/sbin/home-security-wifi-monitor-setup"
+  render_unit \
+    home-security-wifi-monitor.service.in \
+    "$WIFI_UNIT"
+  install -d /etc/NetworkManager/conf.d
+  cat > "$NM_DROPIN" <<EOF
+# Installed by home-security-apply-systemd. Keeps NetworkManager off the
+# dedicated monitor interface so it never grabs it on boot.
+[keyfile]
+unmanaged-devices=interface-name:$WIFI_INTERFACE
+EOF
+  chmod 0644 "$NM_DROPIN"
+else
+  rm -f "$SYSTEMD_DIR/$WIFI_UNIT" "$NM_DROPIN"
+fi
+
 if [ "${HOME_SECURITY_PI_SKIP_SYSTEMCTL:-0}" != "1" ]; then
   systemctl disable --now home-security-ble-startup-scan.service 2>/dev/null || true
   systemctl reset-failed home-security-ble-startup-scan.service 2>/dev/null || true
   rm -f "$SYSTEMD_DIR/home-security-ble-startup-scan.service"
+
+  if [ -n "$WIFI_INTERFACE" ]; then
+    nmcli general reload 2>/dev/null || true
+  else
+    # No adapter for this Pi: ensure any previously-installed unit is gone.
+    systemctl disable --now "$WIFI_UNIT" 2>/dev/null || true
+    systemctl reset-failed "$WIFI_UNIT" 2>/dev/null || true
+  fi
+
   systemctl daemon-reload
   systemctl enable home-security-bluetooth-power.service
   systemctl enable home-security-ble-observer.service
   systemctl restart home-security-ble-observer.service
+
+  if [ -n "$WIFI_INTERFACE" ]; then
+    systemctl enable "$WIFI_UNIT"
+    systemctl restart "$WIFI_UNIT"
+  fi
 fi

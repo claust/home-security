@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+# Privileged one-time interface setup for the Wi-Fi monitor service.
+#
+# Invoked from the systemd unit as a root ExecStartPre ('+' prefix), so it runs
+# regardless of the unprivileged User= the main process drops to. Kept as a
+# single script (rather than several ExecStartPre lines) so the binary paths and
+# the /usr/sbin PATH fix-up live in one place — the non-login deploy environment
+# does not include /usr/sbin, where `iw` lives.
+#
+# This is passive, receive-only setup: it puts the dedicated adapter into
+# monitor mode. It never associates, injects, or transmits.
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+INTERFACE="${1:?usage: home-security-wifi-monitor-setup <interface>}"
+REG_DOMAIN="${HOME_SECURITY_PI_WIFI_REG_DOMAIN:-DK}"
+
+# Hand the radio off from NetworkManager (the persistent conf.d drop-in also
+# does this on boot; doing it here too keeps the unit self-sufficient).
+nmcli device set "$INTERFACE" managed no || true
+
+# Permit 2.4 GHz channel tuning for the local regulatory domain. Best-effort:
+# capture still works on the current channel if the regdb is unavailable.
+iw reg set "$REG_DOMAIN" || true
+
+# Switch the dedicated adapter into monitor mode. These steps are mandatory —
+# fail loudly (systemd will retry) if the adapter cannot enter monitor mode.
+ip link set "$INTERFACE" down
+iw dev "$INTERFACE" set type monitor
+ip link set "$INTERFACE" up

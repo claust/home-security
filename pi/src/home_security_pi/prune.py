@@ -24,6 +24,7 @@ class PruneResult:
     effective_before_utc: str
     keep_last_days: int
     rows_deleted: int
+    wifi_rows_deleted: int
     pruned_at_utc: str
 
 
@@ -82,6 +83,18 @@ def prune_observations(
             (effective_before_iso,),
         )
         rows_deleted = cursor.rowcount
+        # The wifi table only exists on Pis with a monitor-capable adapter;
+        # prune it under the same floor, but only when present.
+        wifi_rows_deleted = 0
+        if _table_exists(connection, "wifi_address_observations"):
+            wifi_cursor = connection.execute(
+                """
+                DELETE FROM wifi_address_observations
+                WHERE observed_at_utc <= ?
+                """,
+                (effective_before_iso,),
+            )
+            wifi_rows_deleted = wifi_cursor.rowcount
         connection.commit()
 
     return PruneResult(
@@ -90,8 +103,17 @@ def prune_observations(
         effective_before_utc=effective_before_iso,
         keep_last_days=keep_last_days,
         rows_deleted=int(rows_deleted),
+        wifi_rows_deleted=int(wifi_rows_deleted),
         pruned_at_utc=now.isoformat(),
     )
+
+
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    return row is not None
 
 
 def main() -> None:
