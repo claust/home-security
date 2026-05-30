@@ -33,3 +33,12 @@ Environment variables (all prefixed `HOME_SECURITY_API_`):
 | Search | `GET /search` |
 
 The OpenAPI schema is the source of truth — point a typed client generator at `/openapi.json`.
+
+A generated copy is committed at [`openapi.json`](openapi.json). Regenerate it
+without running the server (or having an archive present) with:
+
+```sh
+uv run home-security-api-openapi openapi.json
+```
+
+Omit the path argument to write the schema to stdout instead.

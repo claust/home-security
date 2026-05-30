@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 home-security-api = "home_security_api.__main__:main"
+home-security-api-openapi = "home_security_api.openapi:main"
 
 [build-system]
 requires = ["uv_build>=0.9.21,<0.12.0"]
