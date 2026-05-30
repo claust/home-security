@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }} (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor (matches requires-python / ruff target-version) and a modern
+        # release. The three packages each lint, test, and build independently.
+        python-version: ["3.11", "3.13"]
+        include:
+          - package: api
+            test: uv run pytest -q
+          - package: hub
+            test: uv run python -m unittest discover -s tests
+          - package: pi
+            test: uv run python -m unittest discover -s tests
+        package: [api, hub, pi]
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.21"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: "${{ matrix.package }}/uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync --dev --python ${{ matrix.python-version }}
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Test
+        run: ${{ matrix.test }}
+
+      - name: Build package
+        run: uv build
+
+  web:
+    name: Web frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # package.json with "packageManager" lives in web/, not the repo
+          # root where the action looks, so pin the version explicitly.
+          version: "11.5.0"
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check (oxfmt)
+        run: pnpm exec oxfmt --check .
+
+      - name: Lint (oxlint)
+        run: pnpm lint
+
+      - name: Typecheck (tsgo)
+        run: pnpm typecheck
+
+      - name: Build (vite)
+        run: pnpm build

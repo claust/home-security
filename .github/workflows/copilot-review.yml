@@ -1,0 +1,27 @@
+name: Request Copilot review
+
+# Automatically request a GitHub Copilot code review on every pull request,
+# so we don't have to add it by hand each time.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  request-copilot:
+    name: Add Copilot as reviewer
+    runs-on: ubuntu-latest
+    # Skip drafts; the ready_for_review event handles them once marked ready.
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Request review from Copilot
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR/requested_reviewers" \
+            -X POST \
+            -f "reviewers[]=copilot-pull-request-reviewer[bot]"

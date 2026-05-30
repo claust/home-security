@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from home_security_api.db import open_readonly
 from home_security_api.settings import Settings
 
 
@@ -14,19 +15,29 @@ def get_settings(request: Request) -> Settings:
 
 
 def get_connection(request: Request) -> Iterator[sqlite3.Connection]:
-    """Yield the shared read-only sqlite connection.
+    """Yield a fresh read-only sqlite connection scoped to this request.
 
-    SQLite handles many concurrent readers; we keep one process-wide
-    connection and rely on its thread-safety for short reads. If the
-    archive disappears at runtime, surface a 503.
+    FastAPI dispatches sync endpoints to a threadpool, so a single
+    process-wide connection would be used concurrently by multiple threads.
+    sqlite3 connections are not safe to share that way -- concurrent queries
+    corrupt each other's cursors (``sqlite3.InterfaceError: bad parameter or
+    other API misuse``, or aggregates silently returning ``None``), which
+    surfaces as a 500. The archive is opened read-only (``mode=ro`` +
+    ``PRAGMA query_only``), so a per-request connection is cheap and fully
+    concurrency-safe. If the archive disappears at runtime, surface a 503.
     """
-    connection: sqlite3.Connection | None = getattr(request.app.state, "db", None)
-    if connection is None:
+    settings: Settings = request.app.state.settings
+    try:
+        connection = open_readonly(settings.archive_path)
+    except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="archive connection not available",
-        )
-    yield connection
+        ) from exc
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
